@@ -1,5 +1,5 @@
 import './App.css'
-import OrderList from './pages/OrderList'
+import OrderList from './views/OrderList'
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import theme from "./theme/index"; 
 
@@ -15,4 +15,4 @@ function App() {
   )
 }
 
-export default A
+export default App
