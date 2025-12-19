@@ -24,11 +24,20 @@ import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import TableSortLabel from "@mui/material/TableSortLabel";
 
 // import StatusChip from "../components/StatusChip";
-import SearchInput from "../components/SearchInput";
-import { rows } from "../utils/rows";
-import { statusChipColorMap } from "../constants/statusChip";
+import SearchInput from "../../components/SearchInput";
+import { rows } from "../../utils/rows";
+import { statusChipColorMap } from "../../constants/statusChip";
+import { useNavigate } from "react-router-dom";
+import type { Order } from "../../types/order";
 
 export default function OrderList() {
+
+  const navigate = useNavigate();
+
+  const handleViewOrder = (orderId: Order["id"]) => {
+    navigate(`/details/${orderId}`);
+  };
+
   return (
     <Container maxWidth="lg">
     <Card>
@@ -110,7 +119,10 @@ export default function OrderList() {
                   <Chip label={row.status}  color={statusChipColorMap[row.status]}/>
                 </TableCell>
                 <TableCell align="center">
-                  <IconButton color="primary">
+                  <IconButton 
+                    color="primary"  
+                    onClick={() => handleViewOrder(row.id)}
+                  >
                     <VisibilityOutlinedIcon />
                   </IconButton>
                   <IconButton color="secondary">

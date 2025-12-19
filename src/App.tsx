@@ -1,7 +1,8 @@
 import './App.css'
-import OrderList from './views/OrderList'
+// import OrderList from './views/orders/List'
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import theme from "./theme/index"; 
+import AppRoutes from './routes/main';
 
 function App() {
 
@@ -9,7 +10,8 @@ function App() {
     <>
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <OrderList />
+      {/* <OrderList /> */}
+      <AppRoutes />
     </ThemeProvider>
     </>
   )
