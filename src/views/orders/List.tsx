@@ -51,7 +51,7 @@ export default function OrderList() {
             <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />}>
               Download
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />}>
+            <Button variant="contained" color="primary" startIcon={<AddIcon />}>
               Add New
             </Button>
           </Stack>

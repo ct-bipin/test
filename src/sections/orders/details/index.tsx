@@ -11,8 +11,6 @@ import type { Order } from "../../../types/order";
 export default function OrderDetailsPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const [tab, setTab] = useState(0);
-  console.log("Current tab:", tab);
-
 
   const order: Order | undefined = rows.find(
     (item) => item.id === orderId

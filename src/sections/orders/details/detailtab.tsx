@@ -7,8 +7,7 @@ import {
   Divider,
   Chip,
 } from "@mui/material";
-
-// import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+ 
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import PhoneOutlinedIcon from "@mui/icons-material/PhoneOutlined";
 import OrderItem from "../../../components/orders/OrderItem";
@@ -46,7 +45,8 @@ export default function Details() {
             <Stack
               direction={{ xs: "column", md: "row" }}
               spacing={{ xs: 3, md: 6 }}
-              sx={{ p: 2 }}
+              // sx={{ p: 2 }} 
+              p={2}
             >
               {/* Payment Method */}
               <Stack spacing={1.5} flex={1}>

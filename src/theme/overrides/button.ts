@@ -1,18 +1,21 @@
 // theme/overrides/button.ts
-import type { Components, Theme } from "@mui/material/styles";
+import type { Components, 
+  // Theme
+
+ } from "@mui/material/styles";
 
 export default function MuiButton(
-  theme: Theme
+  // theme: Theme
 ): Components["MuiButton"] {
   return {
     styleOverrides: {
       root: {
         borderRadius: 8,
-        ...theme.typography.button,
+        // ...theme.typography.button,
       },
 
       outlined: {
-        border: "1px solid",
+        border: "px solid",
       },
     },
   };

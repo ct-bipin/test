@@ -1,6 +1,7 @@
 
 import "@mui/material/TableCell";
 import "@mui/material/styles";
+import "@mui/material/Typography";
 
 declare module "@mui/material/TableCell" {
   interface TableCellPropsVariantOverrides {
@@ -26,5 +27,12 @@ declare module "@mui/material/styles" {
   interface SimplePaletteColorOptions {
     lighter?: string;
     darkest?: string;
+  }
+}
+
+
+declare module "@mui/material/Typography" {
+  interface TypographyPropsVariantOverrides {
+    link: true;
   }
 }
