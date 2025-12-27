@@ -1,13 +1,11 @@
-// @react
 import { useNavigate } from "react-router-dom";
 
 // @mui
 import Button from "@mui/material/Button";
-import Container from "@mui/material/Container";
 import Grid from "@mui/material/Grid";
 
 // @project
-import MainCard from "../../components/MainCard";
+import { MainCard } from "@/components";
 
 const routes = [
   { label: "Button", path: "/component/button" },
@@ -25,24 +23,21 @@ export default function RoutePage() {
   const navigate = useNavigate();
 
   return (
-    <Container maxWidth="lg" sx={{ py: 5 }}>
-      <MainCard title="Component Showcase Dashboard">
-
-        <Grid container spacing={3}>
-          {routes.map((item) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.path}>
-              <Button
-                fullWidth
-                size="large"
-                variant="outlined"
-                onClick={() => navigate(item.path)}
-              >
-                {item.label}
-              </Button>
-            </Grid>
-          ))}
-        </Grid>
-      </MainCard>
-    </Container>
+    <MainCard title="Component Showcase Dashboard">
+      <Grid container spacing={3}>
+        {routes.map((item) => (
+          <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.path}>
+            <Button
+              fullWidth
+              size="large"
+              variant="outlined"
+              onClick={() => navigate(item.path)}
+            >
+              {item.label}
+            </Button>
+          </Grid>
+        ))}
+      </Grid>
+    </MainCard>
   );
 };

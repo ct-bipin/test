@@ -1,4 +1,3 @@
-// @react
 import type { ReactNode } from "react";
 
 // @mui

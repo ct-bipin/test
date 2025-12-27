@@ -13,13 +13,13 @@ export default function MuiCardHeader(
         paddingLeft: theme.spacing(4),
         paddingRight: theme.spacing(4),
         gap: "15px",
-        borderBottom: `1px solid ${theme.palette.grey[200]}`, 
+        borderBottom: `1px solid ${theme.palette.grey[200]}`,
       },
       title: {
         fontSize: "16px",
         color: theme.palette.grey[900],
         textAlign: "left",
-        fontWeight:500,
+        fontWeight: 500,
       },
     },
   };
