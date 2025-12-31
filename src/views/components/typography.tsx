@@ -11,7 +11,7 @@ import { MainCard } from "@/components";
 export default function TypographyPage() {
   return (
     <MainCard title="Typography Component Showcase">
-      <Stack spacing={3}>
+      <Stack sx={{gap:1}} >
         {/* Headings */}
         <Typography variant="h1">h1. Heading</Typography>
         <Typography variant="h2">h2. Heading</Typography>

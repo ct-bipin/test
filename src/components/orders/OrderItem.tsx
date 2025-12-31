@@ -9,7 +9,7 @@ type OrderItemProps = {
 
 export default function OrderItem({ label, value }: OrderItemProps) {
   return (
-    <Stack direction="row" spacing={1}>
+    <Stack direction="row" sx = {{ gap:1 }}>
       <Typography color="text.primary" variant="body1">
         {label} :
       </Typography>

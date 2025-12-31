@@ -34,7 +34,7 @@ export default function PaginationPage() {
 
   return (
     <MainCard title="Pagination Component Showcase">
-      <Stack spacing={1} mb={3}>
+      <Stack gap={1} mb={3}>
         {visibleRows.map((row) => (
           <Typography key={row}>{row}</Typography>
         ))}

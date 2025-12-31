@@ -14,7 +14,7 @@ import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 export default function ButtonPage() {
   return (
     <MainCard title="Button Component Showcase">
-      <Stack spacing={6}>
+      <Stack sx={{gap:6}}>
 
         <MainCard title="Contained Button ">
           <Button variant="contained">Primary</Button>

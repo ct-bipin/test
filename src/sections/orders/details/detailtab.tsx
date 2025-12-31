@@ -40,14 +40,14 @@ export default function Details() {
         <Divider />
 
         <Stack direction={{ xs: "column", md: "row" }} p={2}>
-          <Stack spacing={1.5} flex={1}>
+          <Stack  sx = {{gap: 1.5, flex:1}}>
             <OrderItem label="Payment method" value="Credit Card" />
             <OrderItem label="Method" value="Credit Card" />
             <OrderItem label="Transaction ID" value="000001-TXT" />
             <OrderItem label="Amount" value="$2500" />
           </Stack>
 
-          <Stack gap={1.5} flex={2}>
+          <Stack sx={{gap:1.5, flex:2}}>
             <OrderItem label="Shipping method" value="" />
             <OrderItem label="Carrier" value="Carrier" />
             <OrderItem label="Tracking Code" value="FX-012345-6" />
@@ -56,11 +56,11 @@ export default function Details() {
         </Stack>
 
         <Stack direction={{ xs: "column", md: "column" }} px={2} py={4}>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" sx={{gap:1}}>
             <OrderItem label="Fulfillment status" value="Delivered" />
           </Stack>
 
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" sx ={{gap:1}}>
             <OrderItem label="Payment status" value="" />
             <Chip
               label="Paid"
@@ -75,9 +75,11 @@ export default function Details() {
 
         <Stack
           direction={{ xs: "column", md: "row" }}
-          spacing={{ xs: 3, md: 6 }}
-          gap={{ xs: 3, md: 6 }}
-          py={4}
+          sx={{
+            spacing: { xs: 3, md: 6 },
+            gap: { xs: 3, md: 6 },
+            py: 4,
+          }}
         >
           <Stack gap={1.5} flex={1}>
             <OrderItem label="Billing address" value="" />

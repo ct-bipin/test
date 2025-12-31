@@ -15,7 +15,7 @@ export default function ColorPage() {
 
   return (
     <MainCard title="Color Component Showcase">
-      <Stack spacing={6}>
+      <Stack sx={{gap:1}}>
         {colorData.map((group) => (
           <Stack key={group.name} gap={2}>
             <Typography variant="h2" color="grey.600">
@@ -35,9 +35,7 @@ export default function ColorPage() {
               {group.colors.map((color) => (
                 <Stack
                   key={color.label}
-                  spacing={1}
-                  p={1}
-                  sx={{ width: 199, }}
+                  sx={{ width: 199, gap:1, p:1}}
                 >
                   <Card
                     sx={{

@@ -12,24 +12,21 @@ import InputAdornment from "@mui/material/InputAdornment";
 
 export default function TextfieldpPage() {
   return (
-      <MainCard title="Textfield Component Showcase">
-        <TextField
-          placeholder="Search"
-          sx = {{
-            height: 44,
-            width: 320
-          }}
-          slotProps={{
-            input: {
-              "data-search": true,
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: "grey.600" }} />
-                </InputAdornment>
-              ),
-            },
-          }}
-        />
-      </MainCard>
+    <MainCard title="Textfield Component Showcase">
+      <TextField
+        placeholder="Search"
+        sx={{ height: 44, width: 320 }}
+        slotProps={{
+          input: {
+            "data-search": true,
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ color: "grey.600" }} />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+    </MainCard>
   );
-};
+}

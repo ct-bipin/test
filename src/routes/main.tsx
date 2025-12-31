@@ -2,7 +2,6 @@ import { createBrowserRouter } from "react-router-dom";
 
 // @project
 import { AppLayout } from "@/layouts";
-import { ComponentLayout } from "@/layouts";
 
 import { ButtonPage } from "@/views/components";
 import { CheckboxPage } from "@/views/components";
@@ -27,10 +26,8 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <OrderListPage /> },
       { path: "/details/:orderId", element: <OrderDetailsPage /> },
-
       {
         path: "/component",
-        element: <ComponentLayout />,
         children: [
           { index: true, element: <RoutePage /> },
           { path: "button", element: <ButtonPage /> },
