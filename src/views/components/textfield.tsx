@@ -12,7 +12,6 @@ import InputAdornment from "@mui/material/InputAdornment";
 
 export default function TextfieldpPage() {
   return (
-    <>
       <MainCard title="Textfield Component Showcase">
         <TextField
           placeholder="Search"
@@ -32,6 +31,5 @@ export default function TextfieldpPage() {
           }}
         />
       </MainCard>
-    </>
   );
 };

@@ -7,11 +7,9 @@ import { MainCard } from "@/components";
 // ---------------------------------  CHECKBOX - PAGE  ---------------------------------
 
 export default function CheckboxPage() {
-    return (
-        <>
-            <MainCard title="Checkbox Component Showcase">
-                <Checkbox />
-            </MainCard>
-        </>
-    )
+  return (
+    <MainCard title="Checkbox Component Showcase">
+      <Checkbox />
+    </MainCard>
+  );
 }

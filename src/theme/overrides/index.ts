@@ -19,7 +19,7 @@ import OutlinedInput from "./outlined-input";
 
 export default function components(theme: Theme): Components {
   return {
-      ...Button(),
+      ...Button(theme),
       ...Chip(theme),
       ...IconButton(),
       ...CardHeader(theme),

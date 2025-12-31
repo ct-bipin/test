@@ -10,7 +10,6 @@ import { MainCard } from "@/components";
 
 export default function ChipPage() {
   return (
-    <>
       <MainCard title="Chip Component Showcase">
         <Grid container spacing={6}>
           <Grid size={{ xs: 12, md: 6 }}>
@@ -34,6 +33,5 @@ export default function ChipPage() {
           </Grid>
         </Grid>
       </MainCard>
-    </>
   );
 };

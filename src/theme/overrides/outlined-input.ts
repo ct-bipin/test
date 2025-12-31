@@ -12,7 +12,8 @@ export default function OutlinedInput(theme: Theme) {
             height: 44,
             backgroundColor: theme.palette.grey[50],
             borderRadius: 12,
-            boxShadow: "0px 1px 2px rgba(10,13,18,0.08)",
+            // boxShadow: "0px 1px 2px rgba(10,13,18,0.08)",
+            boxShadow: theme.shadow.outlinedinput,
 
             "& .MuiOutlinedInput-notchedOutline": {
               borderColor: theme.palette.grey[200],

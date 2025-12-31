@@ -24,36 +24,26 @@ export default function OrderDetailsPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const [tab, setTab] = useState(0);
 
-  const order: Order | undefined = rows.find(
-    (item) => item.id === orderId
-  );
+  const order: Order | undefined = rows.find((item) => item.id === orderId);
 
   if (!order) {
     return <Navigate to="/" replace />;
   }
 
   return (
-    <>
-      <Container maxWidth="lg">
-        <MainCard title="Order Details">
-          <Tabs
-            value={tab}
-            onChange={(_, value) => setTab(value)}
-            sx={{ mb: 3 }}
-          >
-            <Tab label="Details" />
-            <Tab label="Invoice" />
-            <Tab label="Status" />
-          </Tabs>
+    <Container maxWidth="lg">
+      <MainCard title="Order Details">
+        <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 3 }}>
+          <Tab label="Details" />
+          <Tab label="Invoice" />
+          <Tab label="Status" />
+        </Tabs>
 
-          {/* Tab Content */}
-          {tab === 0 && <Details />}
-          {tab === 1 && <Invoice />}
-          {tab === 2 && <Status />}
-
-        </MainCard>
-      </Container>
-    </>
-
+        {/* Tab Content */}
+        {tab === 0 && <Details />}
+        {tab === 1 && <Invoice />}
+        {tab === 2 && <Status />}
+      </MainCard>
+    </Container>
   );
 }
