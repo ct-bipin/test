@@ -9,22 +9,25 @@ import { useTheme } from "@mui/material/styles";
 
 interface MainCardProps {
   title?: string;
-  children: ReactNode;
+  subtitle?: string;
+  children?: ReactNode;
 }
 
 // ---------------------------------  COMPONENTS - MAINCARD  ---------------------------------
 
-export default function MainCard({ title, children }: MainCardProps) {
+export default function MainCard({ title, children, subtitle }: MainCardProps) {
   const theme = useTheme();
   return (
-    <Card sx={{ 
-      borderRadius: 3,
-      border: `1px solid ${theme.palette.grey[200]}`,
-      // boxShadow: theme.shadow.card
-      }}>
+    <Card
+      elevation={0}
+      sx={{
+        borderRadius: 3,
+        border: `1px solid ${theme.palette.grey[200]}`,
+      }}
+    >
       {title && (
         <>
-          <CardHeader title={title} />
+          <CardHeader title={title} subheader={subtitle} />
           <Divider />
         </>
       )}

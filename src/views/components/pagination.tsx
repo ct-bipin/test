@@ -6,10 +6,10 @@ import TablePagination from "@mui/material/TablePagination";
 import Typography from "@mui/material/Typography";
 
 // @project
-import { MainCard } from "@/components";
-
+import MainCard from "@/components/MainCard";
 
 const rows = Array.from({ length: 90 }, (_, i) => `Item ${i + 1}`);
+
 // ---------------------------------  PAGINATION - PAGE  ---------------------------------
 
 export default function PaginationPage() {
@@ -34,7 +34,7 @@ export default function PaginationPage() {
 
   return (
     <MainCard title="Pagination Component Showcase">
-      <Stack gap={1} mb={3}>
+      <Stack sx={{ gap: 1, mb: 3 }}>
         {visibleRows.map((row) => (
           <Typography key={row}>{row}</Typography>
         ))}
@@ -53,4 +53,4 @@ export default function PaginationPage() {
       />
     </MainCard>
   );
-};
+}

@@ -14,7 +14,6 @@ export default function Chip(theme: Theme) {
           fontWeight: 500,
           lineHeight: "20px",
         },
-
         colorPrimary: {
           backgroundColor: theme.palette.primary.lighter,
           color: theme.palette.primary.main,

@@ -5,19 +5,19 @@ import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import TablePagination from "@mui/material/TablePagination";
-import OutlinedInput from "@mui/material/OutlinedInput";
+import TextField from "@mui/material/TextField";
 
 // @project
-import OrdersTable from "../../sections/orders/orderlist/Table";
+import OrdersTable from "@/sections/orders/orderlist/Table";
 
 // @types
-import type { Order } from "../../types/order";
+import type { Order } from "@/types/order";
 
 // @utils
-import { rows } from "../../utils/rows";
+import { rows } from "@/utils/rows";
 
 // @project
-import MainCard from "../../components/MainCard";
+import MainCard from "@/components/MainCard";
 
 // @assets
 import AddIcon from "@mui/icons-material/Add";
@@ -37,17 +37,21 @@ export default function OrderList() {
   return (
     <Container maxWidth="lg">
       <MainCard title="Order List">
-        <Stack direction="row" justifyContent="space-between">
-          <OutlinedInput
+        <Stack direction="row" sx={{ mb: 2, justifyContent: "space-between" }}>
+          <TextField
             placeholder="Search"
-            startAdornment={
-              <InputAdornment position="start">
-                <SearchIcon sx={{ color: "grey.600" }} />
-              </InputAdornment>
-            }
+            sx={{ width: 320 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: "grey.600" }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
           />
-
-          <Stack direction="row" gap={3}>
+          <Stack direction="row" sx={{ gap: 3 }}>
             <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />}>
               Download
             </Button>
@@ -62,8 +66,8 @@ export default function OrderList() {
           count={rows.length}
           page={0}
           rowsPerPage={10}
-          onPageChange={() => { }}
-          onRowsPerPageChange={() => { }}
+          onPageChange={() => {}}
+          onRowsPerPageChange={() => {}}
           labelRowsPerPage="Items per page"
         />
       </MainCard>

@@ -5,28 +5,23 @@ import type { Theme } from "@mui/material/styles";
 
 export default function OutlinedInput(theme: Theme) {
   return {
-  MuiOutlinedInput: {
+    MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          '&[data-search="true"]': {
-            height: 44,
-            backgroundColor: theme.palette.grey[50],
-            borderRadius: 12,
-            // boxShadow: "0px 1px 2px rgba(10,13,18,0.08)",
-            boxShadow: theme.shadow.outlinedinput,
+          height: 44,
+          backgroundColor: theme.palette.grey[50],
+          borderRadius: 12,
+          "& .MuiOutlinedInput-notchedOutline": {
+            borderColor: theme.palette.grey[200],
+          },
 
-            "& .MuiOutlinedInput-notchedOutline": {
-              borderColor: theme.palette.grey[200],
-            },
+          "&:hover .MuiOutlinedInput-notchedOutline": {
+            borderColor: theme.palette.grey[200],
+          },
 
-            "&:hover .MuiOutlinedInput-notchedOutline": {
-              borderColor: theme.palette.grey[200],
-            },
-
-            "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-              borderColor: theme.palette.grey[200],
-              borderWidth: 1,
-            },
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+            borderColor: theme.palette.grey[200],
+            borderWidth: 1,
           },
         },
 

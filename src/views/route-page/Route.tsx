@@ -5,7 +5,7 @@ import Button from "@mui/material/Button";
 import Grid from "@mui/material/Grid";
 
 // @project
-import { MainCard } from "@/components";
+import MainCard from "@/components/MainCard";
 
 const routes = [
   { label: "Button", path: "/component/button" },
@@ -15,6 +15,7 @@ const routes = [
   { label: "Pagination", path: "/component/pagination" },
   { label: "Checkbox", path: "/component/checkbox" },
   { label: "Typography", path: "/component/typography" },
+  { label: "Tab", path: "/component/Tab" },
 ];
 
 // ---------------------------------  ROUTE PAGE  ---------------------------------
@@ -24,7 +25,12 @@ export default function RoutePage() {
 
   return (
     <MainCard title="Component Showcase Dashboard">
-      <Grid container spacing={3}>
+      <Grid
+        container
+        sx={{
+          gap: 3,
+        }}
+      >
         {routes.map((item) => (
           <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.path}>
             <Button
@@ -40,4 +46,4 @@ export default function RoutePage() {
       </Grid>
     </MainCard>
   );
-};
+}

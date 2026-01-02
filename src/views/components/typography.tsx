@@ -4,14 +4,14 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 // @project
-import { MainCard } from "@/components";
+import MainCard from "@/components/MainCard";
 
 // ---------------------------------  TYPOGRAPHY - PAGE  ---------------------------------
 
 export default function TypographyPage() {
   return (
     <MainCard title="Typography Component Showcase">
-      <Stack sx={{gap:1}} >
+      <Stack sx={{ gap: 1 }}>
         {/* Headings */}
         <Typography variant="h1">h1. Heading</Typography>
         <Typography variant="h2">h2. Heading</Typography>

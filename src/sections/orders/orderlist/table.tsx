@@ -22,6 +22,7 @@ import type { Order } from "@/types/order";
 // @constants
 import { statusChipColorMap } from "@/constants/status-chip";
 
+// @types
 type OrdersTableProps = {
   rows: Order[];
   onView: (id: Order["id"]) => void;
@@ -56,9 +57,8 @@ export default function OrdersTable({ rows, onView }: OrdersTableProps) {
             "Status",
           ].map((title) => (
             <TableCell key={title}>
-              <TableSortLabel active direction="desc">
-                {title}
-              </TableSortLabel>
+              {title}
+              <TableSortLabel active direction="desc" />
             </TableCell>
           ))}
 

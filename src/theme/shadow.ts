@@ -9,7 +9,7 @@ import { palette } from "./palette";
 export const shadow = {
   none: "none",
   input: `0px 1px 2px ${alpha(palette.grey[900], 0.04)}`,
-  card: `0px 2px 4px ${alpha(palette.primary.main, 0.5)}`,
+  card: `0px 2px 4px ${alpha(palette.primary.main, 0.1)}`,
   button: `0px 3px 6px ${alpha(palette.grey[900], 0.8)}`,
   dropdown: `0px 6px 12px ${alpha(palette.grey[900], 0.12)}`,
   modal: `0px 12px 32px ${alpha(palette.grey[900], 0.16)}`, 

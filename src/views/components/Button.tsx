@@ -4,7 +4,7 @@ import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 
 // @project
-import { MainCard } from "@/components";
+import MainCard from "@/components/MainCard";
 
 // @assets
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
@@ -14,8 +14,7 @@ import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 export default function ButtonPage() {
   return (
     <MainCard title="Button Component Showcase">
-      <Stack sx={{gap:6}}>
-
+      <Stack sx={{ gap: 6 }}>
         <MainCard title="Contained Button ">
           <Button variant="contained">Primary</Button>
         </MainCard>
@@ -23,7 +22,6 @@ export default function ButtonPage() {
         <MainCard title="Outlined Button ">
           <Button variant="outlined">Primary</Button>
         </MainCard>
-
 
         <MainCard title="Icon Button ">
           <IconButton color="primary">
@@ -33,4 +31,4 @@ export default function ButtonPage() {
       </Stack>
     </MainCard>
   );
-};
+}

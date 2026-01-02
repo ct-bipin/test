@@ -5,7 +5,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 // @project
-import { MainCard } from "@/components";
+import MainCard from "@/components/MainCard";
 import { colorData } from "@/utils/color-data";
 
 // ---------------------------------  COLOR - PAGE  ---------------------------------
@@ -15,7 +15,7 @@ export default function ColorPage() {
 
   return (
     <MainCard title="Color Component Showcase">
-      <Stack sx={{gap:1}}>
+      <Stack sx={{ gap: 1 }}>
         {colorData.map((group) => (
           <Stack key={group.name} gap={2}>
             <Typography variant="h2" color="grey.600">
@@ -24,19 +24,18 @@ export default function ColorPage() {
 
             <Stack
               direction="row"
-              gap={2}
-              flexWrap="wrap"
-              justifyContent="center"
-              bgcolor={theme.palette.grey[100]}
-              border={`2px solid ${theme.palette.grey[200]}`}
-              p={2}
-              borderRadius={5}
+              sx={{
+                gap: 2,
+                flexWrap: "wrap",
+                justifyContent: "center",
+                bgcolor: theme.palette.grey[100],
+                border: `1px solid ${theme.palette.grey[200]}`,
+                p: 2,
+                borderRadius: 5,
+              }}
             >
               {group.colors.map((color) => (
-                <Stack
-                  key={color.label}
-                  sx={{ width: 199, gap:1, p:1}}
-                >
+                <Stack key={color.label} sx={{ width: 199, gap: 1, p: 1 }}>
                   <Card
                     sx={{
                       height: 116,
@@ -47,9 +46,11 @@ export default function ColorPage() {
 
                   <Stack
                     direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    p={1}
+                    sx={{
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 1,
+                    }}
                   >
                     <Typography variant="h4" color={theme.palette.grey[500]}>
                       {color.label}
@@ -61,12 +62,10 @@ export default function ColorPage() {
                   </Stack>
                 </Stack>
               ))}
-
             </Stack>
           </Stack>
         ))}
       </Stack>
     </MainCard>
   );
-};
-
+}

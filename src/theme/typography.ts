@@ -1,6 +1,3 @@
-// @project
-import { palette } from "./palette";
-
 // ---------------------------------  THEME - TYPOGRAPHY  ---------------------------------
 
 export const typography = {
@@ -10,98 +7,98 @@ export const typography = {
     fontSize: 34,
     fontWeight: 700,
     lineHeight: "40px",
-    color: palette.grey[900],
+    // color: palette.grey[900],
   },
 
   h2: {
     fontSize: 24,
     fontWeight: 700,
     lineHeight: "29px",
-    color: palette.grey[900],
+    // color: palette.grey[900],
   },
 
   h3: {
     fontSize: 20,
     fontWeight: 600,
     lineHeight: "23px",
-    color: palette.grey[900],
+    // color: palette.grey[900],
   },
 
   h4: {
     fontSize: 16,
     fontWeight: 500,
     lineHeight: "20px",
-    color: palette.grey[900],
+    // color: palette.grey[900],
   },
 
   h5: {
     fontSize: 14,
     fontWeight: 500,
-    lineHeight: "19px",
-    color: palette.grey[900],
+    lineHeight: "20px",
+    // color: palette.grey[900],
   },
 
   h6: {
     fontSize: 12,
     fontWeight: 500,
-    lineHeight: "19px",
-    color: palette.grey[900],
+    lineHeight: "20px",
+    // color: palette.grey[900],
   },
 
   subtitle1: {
     fontSize: 14,
     fontWeight: 500,
     lineHeight: "25px",
-    color: palette.grey[900],
+    // color: palette.grey[900],
   },
 
   subtitle2: {
     fontSize: 12,
     fontWeight: 400,
-    lineHeight: "19px",
-    color: palette.grey[900],
+    lineHeight: "20px",
+    // color: palette.grey[900],
   },
 
   body1: {
     fontSize: 14,
     fontWeight: 400,
-    lineHeight: "19px",
-    color: palette.grey[700],
+    lineHeight: "20px",
+    // color: palette.grey[700],
   },
 
   body2: {
     fontSize: 14,
     fontWeight: 400,
     lineHeight: "21px",
-    color: palette.grey[700],
+    // color: palette.grey[700],
   },
 
   button: {
     fontSize: 12,
     fontWeight: 500,
     lineHeight: "20px",
-    color: palette.grey[700],
+    // color: palette.grey[700],
   },
 
   caption: {
     fontSize: 12,
     fontWeight: 400,
     lineHeight: "20px",
-    color: palette.grey[500],
+    // color: palette.grey[500],
   },
 
   overline: {
     fontSize: 12,
     fontWeight: 400,
     lineHeight: "32px",
-    color: palette.grey[700],
+    // color: palette.grey[700],
   },
 
   link: {
     fontSize: 14,
     fontWeight: 400,
     lineHeight: "21px",
-    color: palette.primary.main,
+    // color: palette.primary.main,
   },
 };
 

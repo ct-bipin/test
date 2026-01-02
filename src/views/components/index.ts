@@ -5,3 +5,4 @@ export { default as ColorPage } from "./Color";
 export { default as PaginationPage } from "./Pagination";
 export { default as TextFieldPage } from "./Textfield";
 export { default as TypographyPage } from "./Typography";
+export { default as TabPage } from "./Tab";

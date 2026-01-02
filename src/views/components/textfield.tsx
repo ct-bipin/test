@@ -2,7 +2,7 @@
 import TextField from "@mui/material/TextField";
 
 // @project
-import { MainCard } from "@/components";
+import MainCard from "@/components/MainCard";
 
 // @assets
 import SearchIcon from "@mui/icons-material/Search";

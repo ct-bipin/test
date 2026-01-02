@@ -21,6 +21,15 @@ export default function CardHeader(theme: Theme) {
           textAlign: "left" as const,
           fontWeight: 500,
         },
+        content: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        },
+        subheader: {
+          fontSize: 14,
+          color: theme.palette.grey[900],
+        },
       },
     },
   };

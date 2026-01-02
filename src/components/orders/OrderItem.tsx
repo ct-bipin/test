@@ -10,10 +10,10 @@ type OrderItemProps = {
 export default function OrderItem({ label, value }: OrderItemProps) {
   return (
     <Stack direction="row" sx = {{ gap:1 }}>
-      <Typography color="text.primary" variant="body1">
+      <Typography  variant="subtitle2" color="grey.900">
         {label} :
       </Typography>
-      <Typography color="text.secondary" variant="body1">
+      <Typography  variant="caption" color="grey.500">
         {value}
       </Typography>
     </Stack>

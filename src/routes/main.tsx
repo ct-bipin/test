@@ -8,6 +8,7 @@ import { CheckboxPage } from "@/views/components";
 import { ChipPage } from "@/views/components";
 import { ColorPage } from "@/views/components";
 import { PaginationPage } from "@/views/components";
+import { TabPage } from "@/views/components";
 import { TextFieldPage } from "@/views/components";
 import { TypographyPage } from "@/views/components";
 
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
           { path: "pagination", element: <PaginationPage /> },
           { path: "checkbox", element: <CheckboxPage /> },
           { path: "typography", element: <TypographyPage /> },
+          { path: "Tab", element: <TabPage /> },
         ],
       },
     ],

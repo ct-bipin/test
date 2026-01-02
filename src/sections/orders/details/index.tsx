@@ -12,6 +12,11 @@ import Details from "./Detailtab";
 import Invoice from "./Invoicetab";
 import Status from "./Statustab";
 
+// @assests
+import DescriptionTwoToneIcon from "@mui/icons-material/DescriptionTwoTone";
+import ReceiptTwoToneIcon from "@mui/icons-material/ReceiptTwoTone";
+import LocalShippingTwoToneIcon from "@mui/icons-material/LocalShippingTwoTone";
+
 // @types
 import type { Order } from "../../../types/order";
 
@@ -34,9 +39,21 @@ export default function OrderDetailsPage() {
     <Container maxWidth="lg">
       <MainCard title="Order Details">
         <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 3 }}>
-          <Tab label="Details" />
-          <Tab label="Invoice" />
-          <Tab label="Status" />
+          <Tab
+            icon={<DescriptionTwoToneIcon />}
+            iconPosition="start"
+            label="Details"
+          />
+          <Tab
+            icon={<ReceiptTwoToneIcon />}
+            iconPosition="start"
+            label="Invoice"
+          />
+          <Tab
+            icon={<LocalShippingTwoToneIcon />}
+            iconPosition="start"
+            label="Status"
+          />
         </Tabs>
 
         {/* Tab Content */}

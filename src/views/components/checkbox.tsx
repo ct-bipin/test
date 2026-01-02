@@ -2,7 +2,7 @@
 import Checkbox from "@mui/material/Checkbox";
 
 // @project
-import { MainCard } from "@/components";
+import MainCard from "@/components/MainCard";
 
 // ---------------------------------  CHECKBOX - PAGE  ---------------------------------
 
