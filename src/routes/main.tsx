@@ -11,6 +11,7 @@ import { PaginationPage } from "@/views/components";
 import { TabPage } from "@/views/components";
 import { TextFieldPage } from "@/views/components";
 import { TypographyPage } from "@/views/components";
+import { GlassEffect } from "@/views/components";
 
 import { OrderDetailsPage } from "@/views/orders";
 import { OrderListPage } from "@/views/orders";
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
           { path: "checkbox", element: <CheckboxPage /> },
           { path: "typography", element: <TypographyPage /> },
           { path: "Tab", element: <TabPage /> },
+          { path: "GlassEffect", element: <GlassEffect />}
         ],
       },
     ],

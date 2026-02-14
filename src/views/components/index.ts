@@ -6,3 +6,4 @@ export { default as PaginationPage } from "./Pagination";
 export { default as TextFieldPage } from "./Textfield";
 export { default as TypographyPage } from "./Typography";
 export { default as TabPage } from "./Tab";
+export { default as GlassEffect } from "./GlassEffect";

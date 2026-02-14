@@ -16,6 +16,7 @@ const routes = [
   { label: "Checkbox", path: "/component/checkbox" },
   { label: "Typography", path: "/component/typography" },
   { label: "Tab", path: "/component/Tab" },
+  { label: "GlassEffect", path: "/component/GlassEffect" },
 ];
 
 // ---------------------------------  ROUTE PAGE  ---------------------------------
