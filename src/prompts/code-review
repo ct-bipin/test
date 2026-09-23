@@ -1,0 +1,928 @@
+---
+name: code-review
+description:
+  Validates migrated or newly authored UIABLE components against a comprehensive quality checklist. Covers Tailwind styling correctness, Shadcn primitive usage, accessibility, dark mode, TypeScript safety, and
+  performance best practices.
+metadata:
+  type: project
+---
+
+# Code Review — UIABLE Quality Gate
+
+Mandatory review for every component entering UIABLE-INTERNAL, newly authored or migrated from Berry, Mantis, or Saascable. **This is a blocking gate** — code is not finalized until every applicable check passes.
+
+---
+
+## How to Run
+
+Three passes, cheapest first. **Stop and fix at the first failing pass** — do not review for style while the machine checks are still red.
+
+| Pass             | What it covers                                                         | Cost               |
+| :--------------- | :--------------------------------------------------------------------- | :----------------- |
+| 1 — Machine      | §1.3–§1.5, §2.2, §2.4, §2.6–§2.7, §2.10, §3.13, §4.2, §4.4, §5.4, §9.7, §12.1–12.3, §12.5–12.8 | one command batch  |
+| 2 — Read-through | §1–§11, §14                                                            | one read of a file |
+| 3 — Registry     | §13 (blocks only)                                                      | two file checks    |
+| 4 — Judgment     | anything the numbered checks do not name                               | one look at the whole block |
+
+Mark every check ✅ PASS / ❌ FAIL / ⏭️ N/A on each iteration of the **Convergence Loop** below, fixing failures as you go. Only emit the report — using the **Review Summary Template** at the end of this file — once the loop converges.
+
+> **Checks marked (CRITICAL) are hard blockers.** A single violation means the component is not ready, no matter how clean the rest of the review is. They cannot be marked ⏭️ N/A, cannot be waived as a follow-up, and cannot be traded against a passing verdict elsewhere. Fix them before the review is emitted.
+>
+> Currently critical: **2.6** (gap over margin/padding), **3.7** (named interface above 2 props), **3.9** (extract reusable sub-components), **3.13** (extract inline SVG).
+>
+> **⚠️ 2.6 is the first among these.** It is the most-violated rule in the checklist and the one that fails most quietly — margin-based spacing renders identically to gap-based spacing, so nothing about the output betrays it. The Pass 1 grep only finds containers where margin is *already present*; a multi-child container with no margin and no `gap` is equally a violation and is invisible to it. Two things close that hole, and both are required: the Pass 2 instruction to check **every** container with ≥2 children, and the DOM assertion at `block-audit` **4.9**, which proves it against computed styles rather than class strings.
+
+### Convergence Loop
+
+Passes 1–3 are **one iteration**, not a one-shot script. Run the full cycle, fix every failure it finds, then run the full cycle again from Pass 1. Repeat until one complete iteration turns up **zero** ❌ across every applicable check.
+
+```text
+iteration:
+  run Pass 1 → Pass 2 → Pass 3 → Pass 4
+  if any check is ❌:
+    fix it
+    iteration += 1
+    go to iteration          # restart from Pass 1, not from where the fix was
+  else:
+    stop — emit the summary
+```
+
+**Why restart from Pass 1, not resume where the fix landed.** A fix routinely creates or exposes a violation outside the section it touched:
+
+- Extracting a sub-component per **3.9** can push it past two props, triggering **3.7**
+- Replacing a hardcoded hex per **2.4** can change how a card reads in dark mode, triggering **6.1**
+- Deleting a JSX comment per **12.8** can leave a stray blank line, triggering **12.6**
+- Renaming a helper to a `function` declaration per **1.5** can leave an unused import behind, triggering **4.2**
+
+A pass only catches what was true when it ran. Resuming mid-cycle after a fix skips re-checking the sections that already passed — which is exactly where the fix's side effects land.
+
+**Stop condition:** one full iteration with no failures, not "no failures found so far." A run that fixes 4 issues in iteration 1 and finds 0 in iteration 2 has converged after 2 iterations, not 1. Record the iteration count in the summary.
+
+### Pass 1 — Machine checks
+
+Run these before reading anything. Any hit is a failure to fix, not a judgment call.
+
+```bash
+FILE=src/components/uiable/.../component-name.tsx
+
+# §2.2, §2.4, §12.1–12.3, §12.8 — styling and polish smells
+grep -nE 'style=\{\{|#[0-9a-fA-F]{3,8}|rgba?\(|hsla?\(|oklch\(|console\.(log|warn|error)|\{/\*|TODO' "$FILE"
+
+# §1.5, §9.7 — module-scope arrow helpers, reflexive memoization
+grep -nE '^(export )?const [A-Za-z0-9_]+ = (\(|async \()|useMemo\(|useCallback\(' "$FILE"
+
+# §1.3, §1.4 — type-only and data-only files beside the component
+ls "$(dirname "$FILE")" | grep -E '^(types|data)\.tsx?$|\.data\.tsx?$'
+
+# §3.13 — every <svg> in the file; confirm in Pass 2 each is its own function, not inline in a return
+grep -n '<svg' "$FILE"
+
+# §2.7 — raw px/rem lengths in bracket syntax; each has a scale equivalent to look up.
+# Deliberately does not match percentages, calc(), unitless ratios, or arbitrary properties
+# like [background-size:24px_24px] — those are legitimate bracket uses, not findings.
+grep -noE '\[-?[0-9.]+(px|rem)\]' "$FILE"
+
+# §2.10 — off-scale z-index (anything but z-0/10/20/30/40/50)
+grep -noE '\bz-\[?[0-9]+\]?' "$FILE" | grep -vE ':z-(0|10|20|30|40|50)$'
+
+# §4.4 — cn imported through the @/lib/utils re-export instead of directly
+# from the "cn" package. This is backwards: flip it to `import { cn } from "cn"`.
+grep -n 'cn.*from "@/lib/utils"' "$FILE"
+
+# §2.6 — every margin AND space-x/y class; each hit is a sibling-spacing candidate to convert to
+# gap in Pass 2. space-* compiles to margin on children, so it belongs in this grep, not outside it.
+# (padding is not flagged here — p-*/px-*/py-* is normal internal spacing, not sibling spacing.
+#  this only catches the margin-already-present case — a multi-child container with NO margin
+#  and NO gap is still a violation, but that needs the JSX tree, so it's a Pass 2 check.)
+grep -noE '\bm[trblxsey]?-[a-zA-Z0-9.\[\]]+|\bspace-[xy]-[a-zA-Z0-9.\[\]]+' "$FILE"
+
+# §4.2, §5.4, §12.5–12.7 — types, unused imports, formatting
+npm run type-check
+npm run lint
+npx prettier --check "$FILE"
+```
+
+Hex inside a `<path d="…">`, a `viewBox` or an image URL is geometry or a URL, not a colour — ignore those. Hex or `rgba()` inside `className`, or inside an SVG `fill`/`stroke`/`stopColor`, is a colour and is a finding under **2.4**. `useMemo`/`useCallback` hits are not automatic failures — each one must be justified under **9.7**. Every `<svg` hit is a manual check under **3.13** — the grep only finds the tag, it cannot tell whether it is already its own function.
+
+### Pass 2 — Read-through
+
+Read the file **once** and evaluate §1–§11 and §14 together, grouped by what is already on screen:
+
+- **Top-to-bottom shape** → §1 (ordering: imports → types → data → helpers → component)
+- **Imports block** → §4 (order, aliases, group comments)
+- **Types and props** → §5
+- **JSX structure** → §3 (primitives over raw HTML, composition, whole-hierarchy reuse), §8 (semantics, a11y), §10 (naming)
+- **`className` strings** → §2 (layout, cleanup), §6 (dark mode), §7 (breakpoints), §11 (design tokens). For every container with ≥2 children, confirm `gap-*` is present (**2.6**) — not just where margin was flagged in Pass 1
+- **Logic and handlers** → §9 (performance, memoization), §14 (readability)
+
+### Pass 3 — Registry
+
+Only if the component is a block. Otherwise mark §13 as ⏭️ N/A.
+
+**Multi-file blocks.** If the block folder holds a `components/` subfolder, every file in it is in scope — run Pass 1 across all of them and Pass 2 on each. Report them as one review, attributing each failure to its own file.
+
+```bash
+for f in "$(dirname "$FILE")"/*.tsx "$(dirname "$FILE")"/components/*.tsx; do
+  [ -e "$f" ] && echo "--- $f" && grep -nE '\{/\*|console\.(log|warn|error)' "$f"
+done
+```
+
+### Pass 4 — Judgment
+
+**The checklist is the floor, not the ceiling.** It holds what recurs across many blocks; it cannot anticipate what one specific block gets wrong. After working the numbered checks, look at the block as a whole and ask the question no check asks: *what is wrong here that nothing above named?*
+
+Fix what you find. Three rules keep this from becoming either a rubber stamp or a rewrite:
+
+1. **Fix it, do not merely note it.** An off-checklist finding is held to the same standard as a numbered one — it is repaired in this iteration and re-verified on the next. Treat it as a ❌ for convergence purposes: an iteration that fixed something has not converged.
+2. **Record every one in the summary**, in its own section, with the same columns as a numbered fix — what changed, where, and why. A fix the report does not mention is indistinguishable from an unrequested edit.
+3. **Do not add it to this file.** One occurrence is an observation, not a rule.
+
+The same restraint that applies to the block applies here: stay inside the edit surface (**3.4**), and do not "improve" something that is merely not to your taste. An off-checklist finding is a defect — something broken, unsafe, misleading, or unmaintainable — not a preference.
+
+**When an off-checklist finding earns a number.** Promote it into this checklist only when all three hold:
+
+- it has appeared in **at least three separate blocks**, not three times in one file
+- it is **mechanically checkable** — a grep, a DOM assertion, or a rule a reviewer can apply without re-deriving the reasoning
+- it applies to **blocks generally**, not to one category of block
+
+Anything short of that stays a judgment call. This checklist is already long, and every rule added to it is paid for by every future review — a check that fires once in fifty blocks costs more attention than it saves. The "Off-checklist fixes" section of past reports is the intake queue: when the same finding shows up in it for the third time, that is the signal to write the rule.
+
+---
+
+## 1. File Structure & Ordering
+
+Every component file follows one fixed order. Nothing is placed "wherever it landed".
+
+```text
+Imports
+  ↓
+Types / Interfaces
+  ↓
+Static Data / Constants
+  ↓
+Normal Helper Functions
+  ↓
+Main Component
+  ↓  Component Hooks / State
+  ↓  Component Arrow Functions / Callbacks
+  ↓  JSX
+```
+
+- [ ] **1.1** The file follows the order above end to end — no type, constant, or helper stranded between other blocks
+- [ ] **1.2** **Types directly below imports** — every type/interface declared in the file is grouped immediately after the last import, never interleaved with constants or functions
+- [ ] **1.3** **No type-only file** — do not create a separate `types.ts` for types used by one component. Declare them in the component file
+- [ ] **1.4** **No separate data file** — component-specific static data stays in the same file, declared after the types and before the helpers. Do not create `data.ts` / `*.data.ts` for data only this component reads
+- [ ] **1.5** **Helpers above the component are `function` declarations** — never arrow assignments:
+
+  ```tsx
+  function formatName(name: string) { ... }        // ✅
+  const formatName = (name: string) => { ... }     // ❌
+  ```
+
+- [ ] **1.6** **Arrow functions inside the component** — handlers and callbacks declared in the component body use arrow syntax (`const handleClick = () => { ... }`)
+
+> **Exception:** a block large enough to warrant a `components/` subfolder may also carry sibling `types.ts` / `data.ts`. This is the only case where 1.3 and 1.4 do not apply, and it needs a real size justification, not convenience.
+
+---
+
+## 2. Styling Correctness & Layout
+
+- [ ] **2.1** All visual styling lives in Tailwind utility classes in `className`
+- [ ] **2.2** No inline `style={{}}` — the one exception is a dynamic value Tailwind cannot express:
+
+  ```tsx
+  <div style={{ transform: `translateX(${offset}px)` }} />
+  ```
+
+- [ ] **2.3** Conditional classes use `cn()` from `@/lib/utils` — not string concatenation or template literals
+- [ ] **2.4** No hardcoded colour values — use CSS variable tokens (`bg-primary`, `text-foreground`, `border-border`) or Tailwind palette colors (`bg-gray-100`, `text-slate-900`).
+
+  **`rgb()`, `rgba()`, `hsl()` and `oklch()` are hardcoded colours too.** Hex is the obvious form and the one people remember to avoid; the function forms hide in arbitrary values and slip through every review — `drop-shadow-[0_0_12px_rgba(96,165,250,1)]`, `shadow-[0_20px_40px_rgba(0,0,0,0.5)]`, `bg-[radial-gradient(...,rgba(249,115,22,0.45),transparent)]`. A shadow or glow tuned to one specific theme is exactly what breaks when the buyer changes theirs (**11.6**, `block-audit` **7.1**). Prefer a token with an opacity modifier (`shadow-primary/20`, `bg-primary/10`).
+
+  **This applies inside SVG too, where the value is a colour.** `fill`, `stroke`, `stopColor` and gradient stops are colours and follow this rule; `d`, `viewBox` and other geometry attributes are not colours and are exempt. A hand-built SVG whose gradient stops are six hardcoded oranges is a themed component in name only
+- [ ] **2.5** **Grid/Flex first** — CSS Grid (`grid grid-cols-*`) for main structure, Flexbox (`flex flex-col/row`) for internal alignment
+- [ ] **2.6** **Gap over margin/padding (CRITICAL)** — this is the **top-priority layout rule**: the moment a container holds two or more things — paragraphs, cards, `div`s, icons and text, anything at all — the space between them is managed with `gap-*` on that container. This applies by default, not only as a fix for margin already present in the source. Writing a new container with two children, reviewing one that already exists, extracting a sub-component per **3.9** — in every case, check the container: if it has ≥2 children and no `gap-*`, that is a violation, whether or not any child currently carries margin. Do not use `m-*`/`mt-*`/`ms-*`/`p-*`/`pt-*`/`ps-*` for sibling spacing unless `gap` genuinely cannot produce the design (e.g. spacing that must skip one specific child).
+
+  **`space-x-*` and `space-y-*` are margin, and they are banned here for exactly the same reason.** They read like a gap utility, which is why they survive review, but they compile to `margin-top` / `margin-left` on every child except the first — the precise thing this rule exists to eliminate. They are also the most common way the rule gets bypassed without anyone writing the word "margin". `space-y-1` on a two-paragraph stack is a **2.6** violation, not a tidy alternative to it:
+
+  ```tsx
+  <div className="space-y-1">          {/* ❌ margin on children, wearing a gap costume */}
+  <div className="flex flex-col gap-1"> {/* ✅ */}
+  ```
+
+  They carry two further defects that `gap` does not: the first-child exclusion silently breaks when children are conditionally rendered or reordered, and the injected margins collapse and interact with adjacent margins in ways `gap` never does.
+
+  The fix is mechanical — apply it directly, do not just flag it. Two situations, same rule:
+
+  ```tsx
+  // ❌ Margin used for spacing
+  <div>
+    <p>First paragraph</p>
+    <p className="mt-4">Second paragraph</p>
+    <Card className="mt-6">...</Card>
+  </div>
+
+  // ❌ No margin either — but two children, no gap: still a violation
+  <div className="flex flex-col">
+    <Avatar />
+    <span>Full Name</span>
+  </div>
+
+  // ✅ Both become the same shape — gap on the parent, no per-child spacing
+  <div className="flex flex-col gap-4">
+    <p>First paragraph</p>
+    <p>Second paragraph</p>
+    <Card className="mt-6">...</Card>  {/* different gap value: still needs its own wrapper, or an outer gap-6 */}
+  </div>
+
+  <div className="flex flex-col gap-2">
+    <Avatar />
+    <span>Full Name</span>
+  </div>
+  ```
+
+  When the source used a **responsive** margin (`mt-4 md:mt-6`), carry the same breakpoints onto `gap` (`gap-4 md:gap-6`) rather than dropping the responsiveness — see **7.6**. If siblings in one parent need two different gap values, split them into their own grouping `div`s, each with its own `gap-*` — do not fall back to per-child margin to fake mixed spacing.
+
+- [ ] **2.7** **Never put a raw `px` or `rem` length in bracket syntax.** Use the scale. In v4 the scale includes **bare numeric utilities** — `max-w-200`, `w-220`, `gap-18` resolve against `--spacing` (`4px`) and are first-class, not arbitrary — so the 4px-based scale is effectively complete and a bracketed pixel value is nearly always a value someone did not look up:
+
+  | ❌ Hardcoded length | ✅ Scale equivalent |
+  | :------------------ | :------------------ |
+  | `min-h-[200px]` | `min-h-50` — 200 ÷ 4 |
+  | `w-[1px]` / `h-[1px]` | `w-px` / `h-px` |
+  | `rounded-[2rem]` | `rounded-4xl` |
+  | `text-[8px]` / `text-[13px]` | `text-xs` / `text-sm` — and see **11.5**, nothing renders below 12px |
+  | `opacity-[0.15]` | `opacity-15` |
+  | `p-[13px]` | `p-3` — snap to nearest, per **11.6** |
+
+  When a length genuinely has no scale equivalent, **snap to the nearest one rather than bracketing it.** `text-[2.65rem]` sits between `text-4xl` and `text-5xl`; pick one. This is **11.6** applied to dimensions instead of colour — a block that matches a mockup to the pixel while stepping outside the scale is worse than one that is 2px off and consistent, because the buyer's spacing and radius scales are theirs to change and hardcoded lengths will not follow.
+
+  **Bracket syntax stays correct** for values the scale cannot express by design, and these are not findings: percentages (`h-[300%]`, `w-[55%]`, `top-[5%]`), `calc()`, arbitrary properties (`[background-size:24px_24px]`), gradients, masks, `aspect-[4/3]`, and unitless ratios (`leading-[0.9]`). The test is whether the scale *has* an answer — not whether brackets were used
+- [ ] **2.8** **Clean CSS — every class in the string must actually do something.** Typos (`overflow-hidde`) are the easy case. The expensive case is a **valid Tailwind class that has no effect in its context** — it survives every linter, reads as intentional, and accumulates fast in migrated and junior-authored blocks. Delete each one; do not leave it "in case".
+
+  **A step that is not on the scale is the typo that survives review.** `text-slate-505` reads as completely plausible — it is only wrong because the palette runs `50, 100, 200 … 900, 950` and `505` is not a rung. Unlike `overflow-hidde`, nothing looks misspelled, so it passes every skim. Check the *value* as well as the utility: colour steps against that scale, `z-*` against **2.10**, and spacing against **2.7**. Any off-scale value generates no CSS at all, so the element silently keeps whatever it inherited.
+
+  Work this table against every `className` in the file:
+
+  | # | Dead pattern | Example | Why it does nothing |
+  | :- | :----------- | :------ | :------------------ |
+  | 1 | Flex/grid child props, non-flex/grid parent | `items-center` on a child of a `block` div | `align-items` only applies inside a flex/grid container |
+  | 2 | `gap-*` on a non-flex/grid element | `<div className="gap-4">` with no `flex` | `gap` needs a flex, grid or multi-column container |
+  | 3 | `flex-col` without `flex` | `className="flex-col"` | `flex-direction` needs a flex container |
+  | 4 | Offsets without positioning | `top-0`, `inset-0` on a `static` element | offsets only apply to positioned elements |
+  | 5 | `z-*` on a static, non-flex/grid child | `z-10` on a plain static div | `z-index` applies to positioned elements and flex/grid items only |
+  | 6 | Border color with no border width | `border-red-500` alone | preflight sets `border-width: 0` — nothing renders |
+  | 7 | `h-full` with no parent height | `h-full` inside an auto-height div | `height: 100%` of `auto` resolves to `auto` |
+  | 8 | `truncate` with no width constraint | `truncate` on a flex child with no `min-w-0` | the element never narrows, so it never truncates (**3.3** in `block-audit`) |
+  | 9 | Duplicate property, last wins | `p-4 p-6`, `text-sm text-lg` | the earlier one is overwritten and dead |
+  | 10 | Responsive variant identical to base | `text-sm md:text-sm` | the variant changes nothing at any width |
+  | 11 | `dark:` identical to base | `bg-card dark:bg-card` | same value in both themes |
+  | 12 | `duration-*` / `ease-*` with no `transition-*` | `duration-300` alone | nothing is transitioning |
+  | 13 | `transition-*` with nothing that changes | `transition-colors` and no `hover:`/`focus:`/state variant | a transition with no trigger |
+  | 14 | `group-*` with no `group` ancestor | `group-hover:opacity-100` | the variant never matches |
+  | 15 | `peer-*` with no `peer` sibling | `peer-checked:block` | same |
+  | 16 | `focus:*` on a non-focusable element | `focus:ring-2` on a plain div | it can never receive focus |
+  | 17 | Explicit Tailwind defaults | `flex-row`, `justify-start`, `items-stretch`, `opacity-100`, `font-normal`, `static` | already the default — only keep when overriding a breakpoint or a variant |
+  | 18 | `aspect-*` with a fixed height | `aspect-video h-64` | the explicit height wins; the ratio is dead (**2.11**) |
+  | 19 | `shrink-0` / `grow` on a non-flex child | `shrink-0` in a `block` parent | flex-item properties need a flex parent |
+  | 20 | `space-x-*` alongside `gap-*` | `flex gap-4 space-x-2` | `gap` already spaces them, and `space-*` adds margins that violate **2.6** |
+  | 21 | Text properties on an element with no text | `leading-7` on a wrapper holding only divs | nothing inherits it usefully |
+  | 22 | `divide-*` with fewer than two children | `divide-y` on a single-child div | no divider is ever drawn |
+  | 23 | `overflow-*` on a replaced element | `overflow-hidden` on an `<img>` or `<video>` | replaced elements have no overflowing children — the clip belongs on the wrapper, and putting it here usually means someone was fighting a `rounded-*` corner |
+  | 24 | Inherited text property every child overrides | `text-white/70` + `group-hover:text-white` on a div whose children each set their own `text-*` | nothing inherits it, so neither the colour nor its hover transition can ever be seen |
+  | 25 | `grid-flow-*-dense` with fully explicit placement | `grid-flow-row-dense` where every child sets `col-start`/`row-start` | dense packing only reflows auto-placed items; there are none |
+  | 26 | Resetting a property preflight already zeroes | `mb-0`, `mt-0`, `p-0`, `gap-0` on an element with nothing to remove | preflight and the grid/flex defaults are already `0` — only keep it when it overrides a component default or a variant |
+  | 27 | `max-w-*` wider than a constraining ancestor | `max-w-200` on a `<p>` inside a `max-w-105` wrapper | the ancestor caps it at 420px, so the 800px limit can never apply. Very common after a copy-paste between blocks with different wrapper widths — and it hides the fact that nobody chose the real value |
+  | 28 | `gap-*` on a container with fewer than two children | `<div className="grid gap-2"><Input /></div>` | `gap` is space *between* children; with one child there is no between. Usually a wrapper that used to hold a `<Label>` and lost it — which is also **8.11** |
+  | 29 | A class from the framework the block was migrated from | `f-w-500`, `d-flex`, `text-muted`, `btn`, `row`, `col-md-6` | not Tailwind, generates nothing, and survives every linter because it is a syntactically valid class name. Berry, Mantis and Saascable are Bootstrap-descended, so this residue is specific to migrated blocks and always inert |
+
+  Three that are **not** findings: `w-full` on a block element is redundant but harmless and often intentional at a breakpoint; a shorthand/longhand pair like `p-4 px-6` is a normal override, not dead code; and class **order** is never reviewed — `prettier-plugin-tailwindcss` sorts it automatically, including inside `cn()` and `cva()`.
+
+  Rendered verification is `block-audit` **7.7**, which proves patterns 1–8 and 14–19 against computed styles rather than by reading. **Every class removed must be listed in the report** — a silent cleanup is indistinguishable from a careless one.
+- [ ] **2.9** Border radius uses Tailwind (`rounded-sm`, `rounded-lg`, `rounded-xl`, `rounded-full`) — arbitrary values only when non-standard
+- [ ] **2.10** **z-index follows the established stacking scale** — `z-0`, `z-10`, `z-20`, `z-30`, `z-40`, `z-50`. A new layer snaps to the next rung on that scale; do not introduce an off-scale value (`z-1`, `z-15`, `z-[5]`) to squeeze between two existing layers — bump the whole stack instead
+- [ ] **2.11** **`aspect-*` over a fixed height for responsive media** — an image or video container that must hold a ratio uses `aspect-video` / `aspect-square` / `aspect-[4/3]`, not a fixed `h-*` that breaks the ratio at other widths
+- [ ] **2.12** **Long or dynamic text is bounded** — a label, title, or description whose length isn't controlled by the author uses `truncate` (one line) or `line-clamp-*` (multiple lines) so it cannot blow out the layout. Skip this for text that is always short and known ahead of time
+- [ ] **2.13** **Standard block anatomy** — this is the shape to reach for when **creating** a new block, and what to check for when reviewing one: a `<section>` root (semantic, also satisfies **8.6**) holding one centered, width-bounded content wrapper:
+
+  ```tsx
+  export default function FeatureSection() {
+    return (
+      <section className="bg-background py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* block content */}
+        </div>
+      </section>
+    )
+  }
+  ```
+
+  - **Root:** `<section>`, not a bare `<div>` — every top-level block in the registry does this
+  - **Content wrapper:** `mx-auto max-w-<value> px-4 sm:px-6 lg:px-8` — centers the content and keeps its edges off the viewport edge on mobile. The `max-w-*` value is design-dependent (`max-w-7xl` for wide sections, a bare-numeric value like `max-w-200` for a narrower centered block per **2.7**) — match the design, don't default to one number everywhere
+  - **Vertical rhythm:** the section's own `py-*` grows at `sm:` — `py-16 sm:py-24`, `py-20 sm:py-25`, `py-24 sm:py-32` are all in use. Pick from that range; don't invent an unrelated value
+
+- [ ] **2.14** **No Tailwind v3 utility names left in a v4 codebase.** Some v3 names were removed in v4 and generate nothing; worse, a group of them **still exist in v4 but mean something one step larger**, so a migrated block renders a heavier shadow, a rounder corner or a stronger blur than its author chose — with no error and nothing visibly broken to notice.
+
+  | v3 | v4 | Failure mode |
+  | :- | :- | :----------- |
+  | `shadow-sm` | `shadow-xs` | **silent** — `shadow-sm` in v4 is v3's `shadow` |
+  | `shadow` | `shadow-sm` | **silent** — one step heavier |
+  | `rounded-sm` | `rounded-xs` | **silent** — one step rounder |
+  | `rounded` | `rounded-sm` | **silent** |
+  | `blur-sm` / `blur` | `blur-xs` / `blur-sm` | **silent** — same shift |
+  | `drop-shadow-sm` / `drop-shadow` | `drop-shadow-xs` / `drop-shadow-sm` | **silent** |
+  | `backdrop-blur-sm` / `backdrop-blur` | `backdrop-blur-xs` / `backdrop-blur-sm` | **silent** |
+  | `bg-gradient-to-*` | `bg-linear-to-*` | renamed |
+  | `outline-none` | `outline-hidden` | renamed |
+  | `ring` | `ring-3` | v4's bare `ring` is 1px, not 3px |
+  | `flex-shrink-*` / `flex-grow-*` | `shrink-*` / `grow-*` | renamed |
+  | `overflow-ellipsis` | `text-ellipsis` | renamed |
+  | `bg-opacity-*`, `text-opacity-*`, `border-opacity-*` | the `/` modifier — `bg-black/50` | removed |
+
+  The silent half is what makes this worth a check of its own: the renamed utilities simply stop working and get noticed, while the shifted ones keep rendering and quietly drift the whole block off the design.
+
+  Two stages, because a single pattern cannot do this — `-` is not a word character to `grep`, so `\bshadow\b` matches inside `shadow-md` and buries the real hits. Split the class strings into tokens first, then match each token **exactly** with `-x`:
+
+  ```bash
+  grep -oE '[a-zA-Z0-9:/_.-]+' "$FILE" | grep -xE \
+    '([a-z0-9-]+:)*(shadow|shadow-sm|rounded|rounded-sm|blur|blur-sm|drop-shadow|drop-shadow-sm|backdrop-blur|backdrop-blur-sm|ring|outline-none|overflow-ellipsis|flex-(shrink|grow)-[0-9]+|(bg|text|border)-opacity-[0-9]+|bg-gradient-to-[a-z]+)' \
+    | sort | uniq -c
+
+  # then locate each name the first stage reported
+  grep -n 'shadow-sm' "$FILE"
+  ```
+
+  The variant prefix in the pattern is what catches `dark:shadow-sm` and `md:bg-gradient-to-r`; the exact match is what lets `shadow-md`, `rounded-2xl`, `blur-3xl`, `ring-2` and `shadow-blue-500/20` through untouched.
+
+  **A file mixing both vocabularies is the strongest signal** — `shadow-sm` beside `shadow-xs`, or `bg-gradient-to-tr` beside `bg-linear-to-br`, means a partial migration, so assume every shifted name in that file is still carrying its v3 intent.
+
+  While here, prefer `size-*` over a matching `h-N w-N` pair (`size-4`, not `h-4 w-4`). Not a defect — both compile — but it is the current idiom and halves the class string
+
+- [ ] **2.15** **`framer-motion` is scoped to what actually animates** — wrap the smallest element that needs motion, not the whole section or a static parent. Animated props stay on **transform**/**opacity** (`x`, `y`, `scale`, `opacity`), same constraint as **9.5** — do not animate `width`/`height`/`top`/`left` through `motion.div` either.
+
+  **`repeat: Infinity` needs a reason, and "it looks nice" is not one.** A never-ending animation never lets the compositor idle: it holds a raf loop and keeps a layer alive for as long as the page is open, on every device that loads it. One looping block on a page is a battery cost the buyer did not choose; several are a visibly janky page. Prefer an animation triggered by entry (`whileInView` with `once: true`) or by interaction (`whileHover`). When a loop genuinely is the design — a marquee, a ticker — it still must pause under `prefers-reduced-motion` (`block-audit` **2.6**) and must not be the block's only motion
+
+---
+
+## 3. Component Architecture
+
+- [ ] **3.1** Interactive elements use Shadcn primitives from `@/components/ui/*` — `Button`, `Card`, `Dialog`, `Badge`, `Tabs`, `Table`, `Select`, `Input`, `Checkbox`, `Switch`
+- [ ] **3.2** **Props before overrides** — if a Shadcn component has a built-in prop for the need (`size="sm"`, `variant="outline"`, `icon={<Icon />}`), use it and delete the equivalent custom Tailwind classes.
+
+  **The `!` important modifier is a signal that this check was skipped.** `size-16!` on an `Avatar` says a plain `size-16` lost a specificity fight, and reaching for `!` settles the symptom while leaving the cause. Find the cause first: the component may have a prop for it; the class may be colliding with one the component already applies, in which case `cn()` merging should win and something is bypassing it; or the value may belong in the variant file under **3.4**. `!` is acceptable only against a third-party stylesheet you cannot edit — never against a Shadcn primitive in this repo, where you own both sides
+- [ ] **3.3** No new wrapper components (`ThemedButton`, `ThemedBadge`) — compose Shadcn primitives with explicit Tailwind classes
+- [ ] **3.4** **The component's own file is the entire edit surface.** `components/ui/` files are **not modified** — customization goes in `components/uiable/` variant files. The same applies to everything else outside the component under review: `src/app/globals.css`, `tailwind.config.*`, `tsconfig.json`, `eslint.config.mjs`, `package.json`, other blocks, and shared helpers are all **read-only** while fixing a finding.
+
+  The reason is blast radius. Retuning a token in `globals.css` to fix one component's contrast silently restyles every other component and block in the library, and nobody notices until an unrelated review fails. One finding is never worth a library-wide change made without looking at the library.
+
+  **When a fix genuinely requires an out-of-scope change, stop and report it — do not work around it.** The workaround is always available and always wrong: hardcode the value and the check passes, but you have traded a scope violation for a **2.4** / **11.6** violation and shipped something that breaks the moment a buyer changes their theme (`block-audit` **7.1**). Emit 🔴 FAIL naming the check, the file that would need to change, and what change it needs. That is a design-system decision, and handing it over intact is the correct outcome rather than a failure of the review
+- [ ] **3.5** Component is declared **and exported in one statement**. Both a trailing default export and an arrow assignment are rejected:
+
+  ```tsx
+  export default function ComponentName() { ... }   // ✅
+
+  function ComponentName() { ... }                  // ❌ trailing export
+  export default ComponentName
+
+  const ComponentName = () => { ... }               // ❌ arrow assignment
+  export default ComponentName
+  ```
+
+- [ ] **3.6** Section comment is present above the export — exact format and naming rules in **10.6**
+- [ ] **3.7** **Named interface once a component has more than two props (CRITICAL)** — applies to the main component and every sub-component (**3.9**) alike. At one or two props, typing inline on the destructure is acceptable. At three or more, a named interface is mandatory, declared above the component alongside the other types (**1.2**):
+
+  ```tsx
+  function UserBadge({ name, role }: { name: string; role: string }) { ... }   // ✅ 2 props, inline is fine
+
+  interface UserCardProps {
+    name: string
+    role: string
+    avatarUrl: string
+  }
+
+  function UserCard({ name, role, avatarUrl }: UserCardProps) { ... }         // ✅ 3 props, named interface
+
+  function UserCard({
+    name,
+    role,
+    avatarUrl,
+  }: {
+    name: string
+    role: string
+    avatarUrl: string
+  }) { ... }                                                                 // ❌ 3 props, still typed inline
+  ```
+
+- [ ] **3.8** Self-contained and portable — no Redux/Zustand dependency unless explicitly part of the app layer
+- [ ] **3.9** **Extract reusable sub-components (CRITICAL)** — actively judge whether part of the JSX should become its own component. Candidates: anything repeated, anything rendered inside `.map()`, and any self-contained chunk big enough to hide the parent's structure. When one exists, extract it as a **normal `function` declaration above the main component, in the same file**. If it takes more than two props, its interface is named and goes at the top with the other types, same as the main component (**1.2**, **3.7**):
+
+  ```tsx
+  interface FeatureCardProps {
+    title: string
+    icon: ReactNode
+    description: string
+  }
+
+  function FeatureCard({ title, icon, description }: FeatureCardProps) { ... }
+
+  export default function FeatureSection() {
+    return <div>{features.map((f) => <FeatureCard key={f.id} {...f} />)}</div>
+  }
+  ```
+
+  Three ways to get this wrong:
+
+  ```tsx
+  {features.map((f) => <div key={f.id}>{/* 50 lines */}</div>)}         // ❌ left inline
+  const FeatureCard = ({ title }: FeatureCardProps) => { ... }          // ❌ arrow — see 1.5
+  function FeatureCard({ title, icon, description }: { title: string; icon: ReactNode; description: string }) { ... }  // ❌ 3 props, still inline — see 3.7
+  import { FeatureCard } from "./feature-card"                          // ❌ separate file
+  ```
+
+  A sub-component used only by this component never gets its own file. The sole exception is a block already large enough to justify a `components/` subfolder — the same carve-out as **1.3**/**1.4**.
+
+- [ ] **3.10** **Components over raw HTML** — before writing a raw element, check this table for an equivalent. Raw HTML is fine only when nothing here fits, or the element is semantically required (`<section>`, `<nav>`, `<ul>`, `<article>`, `<h2>`).
+
+  **Direct swaps — raw element → component**
+
+  | Raw HTML | Component | Import from `@/components/ui/…` |
+  | :------- | :-------- | :------------------------------ |
+  | `<button>` | `Button` | `button` |
+  | `<a>` styled as a button | `Button asChild` | `button` |
+  | several buttons in a row | `ButtonGroup` | `button-group` |
+  | `<input>` | `Input` | `input` |
+  | `<input>` with a prefix/suffix addon | `InputGroup` | `input-group` |
+  | `<input type="checkbox">` | `Checkbox` | `checkbox` |
+  | `<input type="checkbox">` as an on/off control | `Switch` | `switch` |
+  | `<input type="radio">` | `RadioGroup`, `RadioGroupItem` | `radio-group` |
+  | `<input type="range">` | `Slider` | `slider` |
+  | `<input type="date">` | `Calendar` | `calendar` |
+  | one-time-code inputs | `InputOTP` | `input-otp` |
+  | `<textarea>` | `Textarea` | `textarea` |
+  | `<select>` | `Select` and its parts | `select` |
+  | `<label>` | `Label` | `label` |
+  | `<form>` | `Form` and its parts | `form` |
+  | `<fieldset>` / a label+input+error group | `Field`, `FieldSet` | `field` |
+  | `<table>`, `<thead>`, `<tr>`, `<th>`, `<td>` | `Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell` | `table` |
+  | `<hr>`, or `<br>` used as a divider | `Separator` | `separator` |
+  | `<details>` / `<summary>` | `Accordion`, or `Collapsible` for one | `accordion`, `collapsible` |
+  | `<dialog>` | `Dialog`; `AlertDialog` to confirm; `Sheet` side panel; `Drawer` on mobile | `dialog`, `alert-dialog`, `sheet`, `drawer` |
+  | `<progress>` | `Progress` | `progress` |
+  | `<kbd>` | `Kbd` | `kbd` |
+  | `<img>` that must hold a ratio | `AspectRatio` | `aspect-ratio` |
+  | avatar `<img>` with initials fallback | `Avatar`, `AvatarImage`, `AvatarFallback` | `avatar` |
+  | `<span>` as a tag, chip or pill | `Badge` | `badge` |
+  | `<div>` as a card | `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter` | `card` |
+  | `<nav>` of ancestor links | `Breadcrumb` | `breadcrumb` |
+  | `<nav>` of page numbers | `Pagination` | `pagination` |
+  | `<nav>` site navigation | `NavigationMenu`, or `Menubar` for an app menu bar | `navigation-menu`, `menubar` |
+  | app shell navigation column | `Sidebar` | `sidebar` |
+  | hand-rolled tab list | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` | `tabs` |
+  | hand-rolled dropdown | `DropdownMenu` | `dropdown-menu` |
+  | right-click menu | `ContextMenu` | `context-menu` |
+  | hover-triggered tooltip | `Tooltip` | `tooltip` |
+  | hover-triggered rich preview | `HoverCard` | `hover-card` |
+  | click-triggered floating panel | `Popover` | `popover` |
+  | a toggleable icon button | `Toggle`, `ToggleGroup` | `toggle`, `toggle-group` |
+  | an inline notice or warning box | `Alert` | `alert` |
+  | a transient notification | `toast` from `sonner` | `sonner` |
+  | `overflow-auto` div with custom scrollbars | `ScrollArea` | `scroll-area` |
+  | grey loading placeholder div | `Skeleton` | `skeleton` |
+  | a spinning loader | `Spinner` | `spinner` |
+  | "nothing here yet" state | `Empty` | `empty` |
+  | a repeated list row of icon + text + action | `Item` | `item` |
+
+  **No raw-HTML equivalent — use these rather than hand-rolling:** `Carousel` (`carousel`), `Chart` + `ChartContainer`/`ChartTooltip` (`chart`), `Command` for a command palette or search list (`command`), `Resizable` for draggable panes (`resizable`), `Calendar` for any month grid (`calendar`).
+
+  **Composed patterns, not single files** — do not try to import these; build them from the parts: **Combobox** = `Command` inside `Popover`. **Date picker** = `Calendar` inside `Popover`. **Data table** = `Table` plus TanStack Table.
+
+  Two caveats. The registry moves: `Empty`, `Field`, `Item`, `Kbd`, `Spinner`, `ButtonGroup` and `InputGroup` are recent additions — confirm the file exists in `src/components/ui/` before importing, since a block that imports a component the buyer has not installed fails **13.8**. And `toast` now ships as `sonner`; the old `toast`/`use-toast` pair is deprecated
+- [ ] **3.11** **Review the whole hierarchy, not the diff** — inspect the entire component for reuse opportunities even when only one line was changed: duplicated JSX to componentize, hand-rolled markup that an existing primitive already covers, deeply nested structures to flatten
+- [ ] **3.12** **Stable `key` on every list item** — anything rendered from `.map()` carries a `key` taken from the data's own identity (`user.id`), never the array index and never omitted
+- [ ] **3.13** **Inline `<svg>` markup is pulled out of the JSX (CRITICAL)** — a raw `<svg>...</svg>` block never sits inline in the returned JSX, no matter how small. Extract it as its own **normal `function` declaration above the main component**, named for what it renders, and call it like any other element. Follows the same placement as **3.9**:
+
+  ```tsx
+  function CheckmarkIcon() {
+    return (
+      <svg viewBox="0 0 24 24" className="size-4">
+        <path d="..." />
+      </svg>
+    )
+  }
+
+  export default function PricingCard() {
+    return (
+      <div>
+        <CheckmarkIcon />
+        <span>Included</span>
+      </div>
+    )
+  }
+  ```
+
+  ```tsx
+  // ❌ Wrong — svg left inline in the returned JSX
+  export default function PricingCard() {
+    return (
+      <div>
+        <svg viewBox="0 0 24 24" className="size-4">
+          <path d="..." />
+        </svg>
+        <span>Included</span>
+      </div>
+    )
+  }
+  ```
+
+  A repeated inline `<svg>` compounds both **3.9** (duplicated JSX) and this check — extract it once, reuse the function. Icons already available from `lucide-react` or `@tabler/icons-react` should use those instead of hand-rolled markup at all.
+
+  **An SVG encoded as a `data:` URI inside `className` is the same violation in a worse form.** A noise texture or pattern written as `bg-[url('data:image/svg+xml,%3Csvg…')]` puts several hundred percent-encoded characters into a class string, where it cannot be read, diffed, or edited, and where `prettier` will not wrap it. Extract the SVG to a function and render it as a positioned element, exactly as above.
+
+---
+
+## 4. Import Organization
+
+Import order is not a judgment call here — it is enforced by `perfectionist/sort-imports` at **error** severity in `eslint.config.mjs`. That means **4.1** and **4.5** are already covered by the `npm run lint` step in Pass 1, and `npm run lint -- --fix` will insert the group comments and reorder the block for you. Do not hand-place the comments; run the fixer, then confirm the result against the table. If the table below and `eslint.config.mjs` ever disagree, the config wins and this table is the thing to correct.
+
+- [ ] **4.1** Groups appear in this order, each preceded by its comment. Order, group membership, and comment text all come from the `groups` / `customGroups` arrays in `eslint.config.mjs`:
+
+  |  #  | Group          | Matches                                                                    | Comment              |
+  | :-: | :------------- | :------------------------------------------------------------------------- | :------------------- |
+  |  1  | `"use client"` | a directive, not an import — perfectionist does not sort or comment it      | —                    |
+  |  2  | `react`        | `react`, `react/*`                                                          | —                    |
+  |  3  | `next`         | `next`, `next/*`                                                            | `// next`            |
+  |  4  | `shadcn`       | `@/components/ui/*`                                                         | `// shadcn`          |
+  |  5  | `external`     | node_modules packages                                                       | `// third-party`     |
+  |  6  | `project`      | `@/data/*`, any `@/*` except `@/types/*`, relative paths not containing `types` | `// project-imports` |
+  |  7  | `assets`       | `lucide-react`, `@tabler/icons-react` — those two packages only             | `// assets`          |
+  |  8  | `types`        | `@/types/*`, relative paths containing `types`                              | `// types`           |
+  |  9  | `constant`     | `@/constant`, `@/constants`, `@/constant(s)/*`, relative `*constant(s)`     | `// constant`        |
+  | 10  | `unknown`      | anything matching none of the above                                         | —                    |
+
+  Note two things this table previously got wrong: **`next` carries a `// next` comment** — it is not comment-less the way `react` is — and **`constant` is a real group** that was missing altogether.
+
+  The `types` group is matched on the **import path**, not on `import type` syntax. `import type { Foo } from "@/lib/foo"` sorts into `project`, because only the path is tested. Only `@/types/*` and relative paths with `types` in the specifier reach the `types` group.
+
+- [ ] **4.2** No unused imports — but note `@typescript-eslint/no-unused-vars` is set to **`warn`**, not `error`, so `npm run lint` exits 0 with unused imports still in the file. Read the warning list in Pass 1; a zero exit code is not this check passing
+- [ ] **4.3** No circular import dependencies
+- [ ] **4.4** Path aliases use the `@/` prefix (`@/components/ui/button`, `@/lib/utils`) — **except `cn`**, which is always imported directly from the third-party `cn` package (`import { cn } from "cn"`, grouped under `// third-party`), never through the `@/lib/utils` re-export. `src/lib/utils.ts` only re-exports `cn` for backward compatibility; importing from there instead of `"cn"` is a violation, not a fix — flip it the other way if found. This is the dominant convention codebase-wide (150+ files import `cn` directly; treat any file using `@/lib/utils` for it as the outlier to correct). The two forms also sort differently, which makes the violation visible: `"cn"` is a package and lands in `external` under `// third-party`, while `@/lib/utils` matches `^@/(?!types/)` and lands in `project` under `// project-imports`
+- [ ] **4.5** A single blank line separates each group so the group comments stay visible — `newlinesBetween: 1` in the rule config enforces exactly one
+
+---
+
+## 5. TypeScript Quality
+
+- [ ] **5.1** Props interfaces build on standard HTML attributes or Shadcn component prop types
+- [ ] **5.2** `any` is tolerated but flagged when trivially avoidable (< 1 minute to type properly)
+- [ ] **5.3** Event handler types are correct:
+  - **Never** use the `React.` prefix — import the type directly: `import { MouseEvent, ChangeEvent, FormEvent } from "react"`
+  - **Always** include the target element generic: `MouseEvent<HTMLDivElement>`, `ChangeEvent<HTMLInputElement>`, `FormEvent<HTMLFormElement>`
+  - Bare `FormEvent` / `MouseEvent` without a generic is deprecated and incorrect
+- [ ] **5.4** `npm run type-check` passes with no errors
+- [ ] **5.5** Generic types are properly constrained where used
+
+---
+
+## 6. Dark Mode Support
+
+- [ ] **6.1** No hardcoded colors that break in dark mode (`bg-white` with no `dark:` counterpart)
+- [ ] **6.2** Mode-dependent text uses the `dark:` prefix — `text-slate-900 dark:text-slate-100`
+- [ ] **6.3** Semantic tokens (`bg-card`, `text-foreground`, `border-border`, `bg-background`) are preferred — they auto-switch between modes
+- [ ] **6.4** Card and section backgrounds carry a dark counterpart — `bg-white dark:bg-card`, or just `bg-card`
+- [ ] **6.5** Opacity-based colors work in both modes — `bg-primary/10` is acceptable
+
+---
+
+## 7. Responsiveness
+
+- [ ] **7.1** Layout adapts at minimum across `sm` (mobile), `md` (tablet), `lg` (desktop)
+- [ ] **7.2** Text scales — `text-lg sm:text-xl md:text-2xl lg:text-4xl`
+- [ ] **7.3** Flex direction switches where needed — `flex-col md:flex-row`
+- [ ] **7.4** Grid columns adjust — `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`
+- [ ] **7.5** Show/hide uses responsive display — `hidden md:flex`
+- [ ] **7.6** **Responsive spacing scales through `gap` first** — when the space between children needs to change across breakpoints, that is a responsive `gap-*` on the parent (`gap-4 md:gap-6 lg:gap-8`), same priority as **2.6**. Responsive padding/margin (`px-4 md:px-8 lg:px-16`) is for the container's own edge spacing — its distance from what surrounds it — not for the space between the things inside it
+- [ ] **7.7** Images scale with `max-w-full` — their `alt` text is checked in **8.2**, aspect-ratio handling in **2.11**
+
+---
+
+## 8. Accessibility
+
+- [ ] **8.1** All interactive elements are keyboard-accessible (Shadcn primitives handle this by default)
+- [ ] **8.2** Images have descriptive `alt` text — not empty, not generic
+- [ ] **8.3** Icon-only buttons have `aria-label`
+- [ ] **8.4** Color is never the sole means of conveying information
+- [ ] **8.5** Focus states are visible (Shadcn primitives ship `focus-visible:` styles)
+- [ ] **8.6** Semantic HTML where appropriate — `<nav>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<header>`, `<footer>`, and for quoted content `<blockquote>` with `<cite>` for the attribution. A testimonial is the canonical case: the quote is a `<blockquote>` and the name is a `<cite>`, not two `<div>`s with CSS `content: open-quote` doing the work of the markup.
+
+  **`<br>` is not a layout tool.** It puts layout into the content: the break is real text content, assistive tech may still announce it, and the "fix" for the next screen size is another variant class. Two different misuses, two different replacements — decide which one you are looking at before changing anything:
+
+  | `<br>` is being used to… | Replace with |
+  | :----------------------- | :----------- |
+  | **Divide content** — separate two groups, or open vertical space between them | **`Separator`** from `@/components/ui/separator`. It is the real element for a thematic break (`role="separator"`), it is themeable, and it is what **3.10** means by preferring a component over raw markup. If the intent was only space and not a visible division, that is `gap-*` on the parent (**2.6**) |
+  | **Wrap a line of text** — `<br className="block sm:hidden" />` to break a heading at one breakpoint | **`text-balance`** or `text-pretty`, letting the browser choose the break; or wrap the segment in `<span className="block sm:inline">` so the *element* changes flow. A `Separator` here would render a visible rule through the middle of the heading |
+
+  `<br>` survives in exactly one case: where the break is part of the content itself — a postal address, a line of verse, a preserved-format snippet. `<hr>` is likewise always `Separator`
+- [ ] **8.7** Heading hierarchy is logical — single `<h1>`, sequential `<h2>` → `<h3>`.
+
+  **Anything that reads as a heading must be a heading element.** A visually dominant line marked up as `<div className="text-4xl font-black">` or `<p className="text-3xl">` is invisible to crawlers, to screen-reader heading navigation, and to the document outline — the three audiences headings exist for. A block whose design has four headings and whose markup has none is not "heading-free"; it has four broken headings. Blocks start at `<h2>` (`block-audit` **5.1**), and the level comes from structure while the size comes from classes — `<h2 className="text-sm">` is correct whenever the structure calls for it.
+
+  The inverse is equally wrong: do not reach for `<h5>` because the text should be small. That is what produced `<h5>` sitting under no `<h2>` at all, which skips four levels and breaks the outline in the other direction
+- [ ] **8.8** Links have discernible text — not just "click here"
+- [ ] **8.9** **Decorative content is hidden from assistive tech** — not just icons. An icon beside its own text label carries `aria-hidden="true"` so screen readers do not announce it twice; icons that _are_ the only label fall under **8.3** instead.
+
+  **Decorative *text* is the case that gets missed.** A giant watermark numeral, a repeated background word, a letter-by-letter animated logo, an `&` or `/` used as a visual divider — these are real text nodes and a screen reader reads every one of them, interleaved into the content. A three-panel section with `01` / `02` / `03` blurred behind each panel announces those numbers in the middle of the prose, and nothing about the markup hints that it is decoration:
+
+  ```tsx
+  <span className="absolute text-[180px] blur-xs">01</span>                    {/* ❌ announced */}
+  <span aria-hidden="true" className="absolute text-[180px] blur-xs">01</span> {/* ✅ */}
+  ```
+
+  The test is whether removing the element would cost a non-sighted reader anything. If the answer is no, it is `aria-hidden="true"`. If the numeral is genuinely meaningful — a real step number in a process — then it belongs *in* the heading text, not as a decorative layer behind it
+
+- [ ] **8.10** **Anything that moves on its own can be paused.** WCAG 2.2.2 is explicit: content that auto-updates, scrolls or animates for more than five seconds needs a mechanism to pause, stop or hide it. An autoplaying carousel is the usual offender, and `onMouseEnter={() => plugin.stop()}` does **not** satisfy it — that is a mouse-only affordance, so keyboard and touch users have no way to stop the movement at all, and those are exactly the users a moving target hurts most.
+
+  What actually satisfies it, in rough order of preference:
+
+  - **A real control** — `CarouselPrevious` / `CarouselNext` plus a visible pause toggle. Manual controls also fix the separate problem that an autoplay-only carousel is unreachable by keyboard
+  - **`stopOnInteraction`** so any interaction halts autoplay permanently rather than resuming and moving the target again
+  - **Pause on focus as well as hover** — `onFocus`/`onBlur` alongside `onMouseEnter`/`onMouseLeave`, so a keyboard user tabbing into a slide stops it
+  - **Respect `prefers-reduced-motion`** by not autoplaying at all for those users (`block-audit` **2.6**)
+
+  The same rule covers marquees, tickers, auto-rotating hero banners and looping counters — anything a reader has to race. It pairs with **2.15**: a loop needs a reason to exist, and once it exists it needs a way out
+
+- [ ] **8.11** **A block with form controls is a real form.** Inputs and a submit button sitting in `<div>`s look identical to a working form and behave nothing like one. Wrap them in `<form>` (or Shadcn `Form`), and check all four of these — sign-up, sign-in, contact, newsletter and checkout blocks fail at least one of them almost every time:
+
+  | Requirement | What breaks without it |
+  | :---------- | :--------------------- |
+  | A real `<form>` element | `required` **never fires** — it is inert outside a form. Enter does not submit. Password managers and browser autofill do not recognise the block as a form at all, which for a sign-up block defeats its purpose |
+  | A `<Label htmlFor>` per control | A `placeholder` is not a label: it vanishes the moment the user types, is announced inconsistently, and leaves the field nameless to assistive tech. Use `Label` from `@/components/ui/label`, or `sr-only` on it when the design wants placeholder-only styling. Rendered counterpart: `block-audit` **6.10** |
+  | `autoComplete` on every field | `given-name`, `family-name`, `email`, `new-password` on sign-up, `current-password` on sign-in. Without them autofill misfires or does nothing, and a password manager will not offer to save credentials |
+  | `type="submit"` on the submit button, `type="button"` on every other | An unmarked button inside a form submits it, so a secondary action silently submits instead of doing its own job |
+
+  **Consent checkboxes ship unchecked.** A terms-of-service or marketing-opt-in box carrying `defaultChecked` is not a styling choice — pre-ticked consent is explicitly invalid under GDPR (Recital 32 requires a clear affirmative act), and shipping one hands that exposure to every buyer who installs the block. `defaultChecked` is fine on a genuine convenience toggle such as "remember me"; it is never correct on a box that records agreement or permission.
+
+  Two further signs of a form copied from another block: a control whose `id` describes a different field than its label (`id="remember"` on a terms checkbox), and a `<Label>` carrying `peer-*` variants with no `peer` on the control beside it — the second is dead CSS under **2.8** pattern 15
+
+---
+
+## 9. Performance
+
+- [ ] **9.1** `"use client"` only when the component truly needs hooks, event handlers, or browser APIs
+- [ ] **9.2** Static data and constants are declared at **module scope**, outside the component, so they are not rebuilt on every render. They stay in the same file — see **1.4**.
+
+  **Data holds component *references*, never rendered JSX.** A field typed `ReactNode` and filled with `<FeatureGraphic />` builds every element at module load, for every entry, whether or not it ever renders — and the element is frozen, so it can never take a prop that varies by row. Store the component itself and render it at the call site:
+
+  ```tsx
+  { icon: Users,    graphic: FeatureGraphic }      // ✅ references
+  { graphic: <FeatureGraphic /> }                  // ❌ an element, built eagerly and un-parameterisable
+
+  const { icon: Icon, graphic: Graphic } = item
+  return <><Icon className="size-4" /><Graphic /></>
+  ```
+
+  A file that stores `icon: Users` correctly and `graphic: <Graphic />` incorrectly in two arrays beside each other is the usual shape of this — the icon field was written by someone who knew, the graphic field by someone reaching for the quickest thing that rendered
+- [ ] **9.3** Images are optimized — `next/image` where applicable, or `<img>` with CDN URLs
+- [ ] **9.4** No unnecessary re-renders — state is scoped to the smallest subtree that needs it. This is about state placement, not memoizing handlers; see **9.7**
+- [ ] **9.5** Animations are GPU-accelerated (`transform`, `opacity`) — never animate `width`, `height`, `top`, `left`. Applies to `framer-motion` the same as raw CSS — see **2.15** for how tightly it should be scoped.
+
+  **`transition-all` is a violation of this check, not a shortcut past it.** It transitions every animatable property, including the layout ones this rule bans, so the moment anything else on the element changes — a border width, a padding, a height — it animates too and forces layout on every frame. Name the properties: `transition-colors`, `transition-transform`, `transition-opacity`, or `transition-[border-color]` for something specific. If you cannot say which property is meant to animate, nothing should be
+- [ ] **9.6** Conditional rendering uses `&&` or a ternary — not CSS hiding of large DOM trees
+- [ ] **9.7** **No reflexive `useMemo` / `useCallback`** — neither is added merely because a function or derived value exists. Each use must point to a real cause: a measured performance problem, a genuinely expensive computation, or a required stable reference (dependency array, memoized child). Plain declarations are the default:
+
+  ```tsx
+  const filteredUsers = users.filter((u) => u.active)             // ✅
+  const filteredUsers = useMemo(() => users.filter(...), [users])  // ❌ without cause
+  ```
+
+---
+
+## 10. Naming & File Conventions
+
+- [ ] **10.1** File name is kebab-case — `component-name.tsx`
+- [ ] **10.2** Default export name is PascalCase — `ComponentName`
+- [ ] **10.3** File name and export name align semantically — `button-solid-primary.tsx` → `ButtonSolidPrimary`
+- [ ] **10.4** Blocks live at `src/components/uiable/blocks/<category>/<block-name>/<block-name>.tsx`
+- [ ] **10.5** Component variants live at `src/components/uiable/<category>/<category>-<variant>.tsx`
+- [ ] **10.6** Section comment sits directly above the component export, in this exact format, name in ALL CAPS, with a space before any trailing number (`Cta1` → `CTA 1`, `Pricing4` → `PRICING 4`):
+
+  ```tsx
+  //  ------------------------------ | COMPONENT NAME | ------------------------------  //
+  ```
+
+---
+
+## 11. Design System Compliance
+
+- [ ] **11.1** Colors map to the UIABLE design system:
+
+  | Semantic Color | Tailwind Class                   |
+  | :------------- | :------------------------------- |
+  | Primary        | `bg-primary`, `text-primary`     |
+  | Secondary      | `bg-secondary`                   |
+  | Success        | `bg-green-600`, `text-green-600` |
+  | Danger         | `bg-destructive`                 |
+  | Warning        | `bg-yellow-500`                  |
+  | Info           | `bg-cyan-500`                    |
+  | Dark           | `bg-slate-800`                   |
+
+  **Reach for this first.** Every token below is defined once in `src/app/globals.css` and switches automatically between light and dark — using it is always correct over a hardcoded hex, in either mode:
+
+  | Token                | Class (`bg-` / `text-` / `border-`) | Light     | Dark      |
+  | :------------------- | :---------------------------------- | :-------- | :-------- |
+  | background           | `background`                        | `#f3f4f6` | `#030712` |
+  | foreground           | `foreground`                        | `#030712` | `#f9fafb` |
+  | card                 | `card`                              | `#ffffff` | `#101828` |
+  | card-foreground      | `card-foreground`                   | `#101828` | `#f9fafb` |
+  | popover              | `popover`                           | `#ffffff` | `#1e2939` |
+  | popover-foreground   | `popover-foreground`                | `#030712` | `#f9fafb` |
+  | primary              | `primary`                           | `#4680ff` | `#4680ff` |
+  | primary-foreground   | `primary-foreground`                | `#f9fafb` | `#101828` |
+  | secondary            | `secondary`                         | `#f3f4f6` | `#1e2939` |
+  | secondary-foreground | `secondary-foreground`              | `#030712` | `#f9fafb` |
+  | muted                | `muted`                             | `#f3f4f6` | `#1e2939` |
+  | muted-foreground     | `muted-foreground`                  | `#6a7282` | `#99a1af` |
+  | accent               | `accent`                            | `#f3f4f6` | `#364153` |
+  | accent-foreground    | `accent-foreground`                 | `#101828` | `#f9fafb` |
+  | destructive          | `destructive`                       | `#e7000b` | `#ff6467` |
+  | border               | `border`                            | `#d1d5dc` | `#364153` |
+  | input                | `input`                             | `#ffffff` | `#101828` |
+  | ring                 | `ring`                              | `#6a7282` | `#6a7282` |
+  | chart-1              | `chart-1`                           | `#155dfc` | `#155dfc` |
+  | chart-2              | `chart-2`                           | `#f0b100` | `#f0b100` |
+  | chart-3              | `chart-3`                           | `#00a63e` | `#00a63e` |
+  | chart-4              | `chart-4`                           | `#ff8904` | `#ff8904` |
+  | chart-5              | `chart-5`                           | `#e7000b` | `#e7000b` |
+  | sidebar              | `sidebar`                           | `#f9fafb` | `#101828` |
+  | sidebar-foreground   | `sidebar-foreground`                | `#030712` | `#f9fafb` |
+  | sidebar-primary      | `sidebar-primary`                   | `#101828` | `#4680ff` |
+  | sidebar-accent       | `sidebar-accent`                    | `#f3f4f6` | `#1e2939` |
+  | sidebar-border       | `sidebar-border`                    | `#e5e7eb` | `#364153` |
+
+  `radius` (`--radius: 0.5rem`) backs the standard `rounded-*` scale (**2.9**) and is not picked by hex.
+
+  **Only when no token above fits** — a status color, a chart hue, a one-off accent — fall back to Tailwind v4's built-in palette. Every family below runs the same 11-step scale (`50` lightest → `950` darkest), so `bg-<family>-<step>` and `text-<family>-<step>` always resolve:
+
+  | Family    | Typical use            | Family    | Typical use      |
+  | :-------- | :--------------------- | :-------- | :--------------- |
+  | `slate`   | cool neutral / dark UI | `orange`  | warm accent      |
+  | `gray`    | neutral text/surfaces  | `amber`   | warning (alt)    |
+  | `zinc`    | neutral, slightly warm | `yellow`  | warning          |
+  | `neutral` | true neutral           | `lime`    | success (bright) |
+  | `stone`   | warm neutral           | `green`   | success          |
+  | `red`     | danger / destructive   | `emerald` | success (alt)    |
+  | —         | —                      | `teal`    | info (alt)       |
+  |           |                        | `cyan`    | info             |
+  |           |                        | `sky`     | info (alt)       |
+  |           |                        | `blue`    | primary-adjacent |
+  |           |                        | `indigo`  | accent           |
+  |           |                        | `violet`  | accent           |
+  |           |                        | `purple`  | accent           |
+  |           |                        | `fuchsia` | accent           |
+  |           |                        | `pink`    | accent           |
+  |           |                        | `rose`    | danger (alt)     |
+
+  Pick the step by weight, not by eye: `50`–`200` for subtle backgrounds and `/10`-style tints (**11.3**), `500`–`600` for solid fills and default text, `700`–`900` for high-contrast text on light backgrounds or dark-mode surfaces.
+
+  **Consume a token as `var(--token)` — never wrap it in `hsl()`.** The tokens above hold complete colour values (`#155dfc`), so `hsl(var(--chart-1))` resolves to `hsl(#155dfc)`, which is invalid CSS. It throws no error and logs no warning: the property is simply dropped and the element renders unstyled or black. This is the single most common way a themed chart or gradient silently loses its colour, because `hsl(var(--x))` was the **correct** form under the older HSL-triplet convention and gets carried over from v3 code, shadcn v3 snippets and any LLM trained on them.
+
+  ```tsx
+  color: "hsl(var(--chart-1))"   // ❌ invalid — silently dropped
+  color: "var(--chart-1)"        // ✅
+  ```
+
+  Grep for it: `grep -n 'hsl(var(--' "$FILE"`. Any hit is a failure, not a judgement call. And when a chart or SVG declares a token this way, check whether the value is even reaching the element — a `ChartConfig` colour that is never read because the mark hardcodes its own `stroke` is dead configuration under **12.4**.
+
+- [ ] **11.2** Solid variants use high-contrast text (`text-white`)
+- [ ] **11.3** Light variants use low-alpha background + colorized text — `bg-green-600/10 text-green-700`
+- [ ] **11.4** Outline variants include `bg-transparent` when needed to block inherited backgrounds
+- [ ] **11.5** Typography follows the `globals.css` base sizes — do not fight the global `text-base: 0.875rem`.
+
+  **No rendered text below 12px.** `text-[8px]` and `text-[10px]` are not a design choice, they are a legibility failure: below roughly 12px, text is unreadable for a large share of users, fails at arm's length on a phone, and is the first thing to break when a buyer's font stack has different metrics than ours. If a label must look small, reach for `text-xs` with `tracking-wide` and `uppercase` — that reads as small without being unreadable. Bracket sizes below the scale (`text-[8px]`) are a finding under **2.7** as well, since the scale deliberately stops where it stops
+- [ ] **11.6** **Closest token wins** — when a source design uses a color with no matching token in `globals.css` or the Tailwind v4 palette, snap to the nearest existing token. Never introduce a new hardcoded value (`bg-[#2878d4]`) to match the original exactly; theme consistency outranks pixel fidelity
+
+---
+
+## 12. Cleanup & Polish
+
+- [ ] **12.1** No commented-out code blocks left behind (unless intentionally documented)
+- [ ] **12.2** No `console.log` / `console.warn` / `console.error` debug statements
+- [ ] **12.3** No `TODO` comments without a tracking reference
+- [ ] **12.4** No dead or unreachable code paths
+- [ ] **12.5** Consistent quote style — double quotes for JSX attributes, per the UIABLE prettier config
+- [ ] **12.6** No trailing whitespace or excessive blank lines
+- [ ] **12.7** File ends with a single newline
+- [ ] **12.8** **No comments inside JSX** — remove every `{/* ... */}`. Do not add new ones.
+
+---
+
+## 13. Registry Compliance (Blocks Only)
+
+⏭️ N/A if the component is not a block.
+
+- [ ] **13.1** Block lives at `src/components/uiable/blocks/<category>/<block-name>/<block-name>.tsx`
+- [ ] **13.2** `src/category-counts.json` is updated (for new blocks)
+- [ ] **13.3** Registry regenerated via `npm run registry:generate` — **never hand-edit `registry.json`**
+- [ ] **13.4** Default export follows **3.5** and **10.2**
+- [ ] **13.5** Self-contained — a consumer installs the block and nothing else. Everything it needs is either declared in the block file itself (per **1.3** and **1.4**) or imported from `@/components/ui/*`. No imports from other blocks, no shared local helpers
+- [ ] **13.6** A flat `blocks/<category>/<block-name>/` is the only shape the registry generator understands — do not introduce nested category groups
+- [ ] **13.7** **No real destinations — every `href` is `#`.** A registry block is a template, not a page; it cannot know where a consumer's links should point, and shipping a real destination sends their users somewhere the block author picked. Replace every one with `#`: absolute URLs (`https://…`), internal routes (`/pricing`), `mailto:`, `tel:`, and the `href` on `next/link` and on any anchor inside `<Button asChild>` alike.
+
+  ```bash
+  grep -n 'href=' "$FILE" | grep -v 'href="#"'
+  ```
+
+  Anything that survives both greps is a real destination to replace — including `href={someVar}`, where the destination is simply hidden behind a variable.
+
+  **Keep the attribute; only change its value.** Deleting `href` instead of setting it to `#` trades a placeholder problem for an accessibility one — an `<a>` with no `href` is not focusable and is not announced as a link (**8.8**). `href="#"` stays focusable, stays announced, and is the correct placeholder.
+
+  **One exception:** an in-page anchor pointing at an `id` *inside this same block* (`href="#pricing-faq"`) is a real, working link and stays. The rule is about destinations outside the block, not about every `#`-prefixed value.
+
+- [ ] **13.8** **Zero-config install — nothing outside the block and `@/components/ui/*`.** These blocks are sold; a buyer installs one into *their* project and it must render correctly with no further setup. Anything the block silently depends on is a support ticket on day one. Specifically, none of:
+
+  - a keyframe or `@utility` defined in **our** `globals.css` (`animate-marquee`, `animate-shimmer` and friends) — if the block animates, the keyframe travels with it or the animation goes
+  - a **Tailwind plugin** we happen to have installed
+  - a **specific font** — a block may set weight and size, never a family the buyer has not loaded
+  - a **CSS variable outside the standard token set** in §11.1 — those exist in the buyer's theme; anything we invented does not
+
+  ```bash
+  grep -nE 'animate-[a-z]|font-\[|font-(sans|serif|mono)|var\(--' "$FILE" \
+    | grep -vE 'animate-(spin|ping|pulse|bounce)\b'
+  ```
+
+  Each surviving hit is a manual check, not an automatic failure: confirm the animation is one Tailwind ships, and that every `var(--…)` names a token from the §11.1 table rather than something only our `globals.css` defines. Rendered verification is `block-audit` **7.2**, which catches what a grep cannot — a dependency arriving through a Shadcn primitive instead of through this file.
+
+- [ ] **13.9** **Placeholder content is licensed for resale and professionally written.** Everything shipped in a block is redistributed to every buyer, so placeholder content carries the same licensing burden as the code:
+
+  - **No real brand marks** — no Google, Stripe or Nike logo in a "trusted by" row. Trademark use in a commercial product is not fair use, and logo walls are where this reliably goes wrong
+  - **No identifiable real people** — testimonial headshots and team photos must come from a source licensed for commercial redistribution, not a web search. Name and photo together make it worse, not better
+  - **Images from a redistributable source**, with the license recorded in the PR. A hotlinked URL is also an availability risk: it breaks the buyer's block when it 404s
+  - **No `lorem ipsum`.** On a product sold on its design, the copy *is* part of the design — plausible, domain-appropriate placeholder text is the difference between a block that looks finished and one that looks like a draft
+  - **Proofread it.** Spelling, grammar and punctuation in placeholder copy ship to every buyer and appear in every gallery screenshot. `Continuos Grow` for "Continuous Growth", or a missing space in `growth.By embracing`, costs nothing to fix and is the single cheapest signal of carelessness a prospective buyer can spot. Read the rendered copy once, out of the JSX, before signing off — typos are invisible while you are reading class strings
+
+  ```bash
+  grep -niE 'lorem ipsum|dolor sit|placeholder\.com|via\.placeholder|unsplash\.com|John Doe|Jane Doe' "$FILE"
+  ```
+
+---
+
+## 14. Code Readability & Maintainability
+
+- [ ] **14.1** **Extract complex conditions** into named variables — `const isSubmitDisabled = !isValid || isSubmitting`
+- [ ] **14.2** **No magic numbers** — arbitrary numeric values become constants with descriptive names
+- [ ] **14.3** **Focused functions** — functions and event handlers stay short and single-responsibility
+- [ ] **14.4** **Destructuring** is used for props and objects
+- [ ] **14.5** **No deep nesting** — replace nested ternaries with early returns or extracted render functions
+- [ ] **14.6** **Self-documenting** — descriptive, unambiguous names remove the need for comments
+- [ ] **14.7** **Never assume the shape of data a buyer will replace.** The static array in a block is placeholder data; the first thing a buyer does is swap it for theirs (`block-audit` **7.4**). Any code that indexes into it positionally will crash on data that is perfectly valid but shaped differently:
+
+  ```tsx
+  name.split(" ")[1].charAt(0)   // ❌ TypeError on "Cher", "Prince", "Madonna"
+  ```
+
+  A single-word name makes `[1]` `undefined` and `.charAt(0)` throws — taking down the whole block, not just the initials. The same applies to `items[0]` on a possibly-empty array, `.split()[2]`, and any non-null assertion on a value that came from data.
+
+  Derive defensively, or do not derive at all:
+
+  ```tsx
+  const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("")   // ✅
+  ```
+
+  Better still for a field like this: put `initials` in the data object. A value the block cannot compute safely from placeholder content is a value the data should carry
+
+---
+
+## Review Summary Template
+
+```
+## Code Review Summary — [Component Name]
+
+**File:** `src/components/uiable/[...]/component-name.tsx`
+**Source:** [Berry/Mantis/Saascable/New]
+**Reviewer:** AI Agent
+
+### Results
+- Iterations to converge: N
+- Total checks: XX
+- ✅ Passed: XX
+- ⏭️ N/A: XX
+
+### Fixed During Review
+1. [Iteration 1] [2.4] Hardcoded hex `#3b82f6` in `className`
+   **Fix:** Replaced with the `bg-primary` token
+2. [Iteration 2] [6.1] Extracting the card in fix #1 left `bg-white` with no dark counterpart
+   **Fix:** Changed to `bg-card`
+
+### Off-checklist fixes (Pass 4)
+Found by judgment, not by a numbered check. Empty is a valid result and is still shown.
+
+| Iter | Where | Change | Why |
+| :--- | :---- | :----- | :-- |
+| 1 | `chartConfig`, L118 | removed the unused `color` key | nothing read it — the `<Area>` sets its own `stroke`, so the config was dead |
+| 2 | testimonial data, L41 | `likes` → `rating` | the field drives a 5-star display; `likes` described neither the values nor the UI |
+
+Seen before: none of these has appeared in three blocks yet, so none is proposed as a check.
+
+### Verdict
+🟢 PASS — ready for finalization (converged after N iterations)
+```
+
+The summary is only emitted once the **Convergence Loop** reaches its stop condition — a full iteration with zero ❌. "Fixed During Review" is a history of what earlier iterations caught and repaired, not a list of open failures; at emission time there are none. Emit `🔴 FAIL — could not converge after N iterations` only if the loop is genuinely stuck (the same check keeps failing after being "fixed", or a fix is blocked by something outside the file) — never as a substitute for finishing the loop.
