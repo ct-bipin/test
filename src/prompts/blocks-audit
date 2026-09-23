@@ -1,0 +1,621 @@
+---
+name: block-audit
+description:
+  Senior-level pre-ship audit of a rendered UIABLE block — boots the dev server, captures it across every breakpoint
+  and both themes, then works 71 checks covering render correctness, responsive behavior, centering and alignment,
+  semantic HTML and SEO structure, ARIA and assistive tech, and design fidelity against a Figma frame or source-library
+  original. Runs as a convergence loop — fix, re-capture the full matrix, re-check everything, repeat until an iteration
+  finds nothing and changes nothing. The runtime counterpart to the code-review static gate.
+---
+
+# Block Audit — Rendered Pre-Ship Gate
+
+`code-review` reads the source. **This skill audits the thing that renders.** A block can pass every static check — clean types, sorted imports, tokens everywhere, zero lint errors — and still ship a sideways-scrolling mobile layout, invisible dark-mode text, a heading outline that wrecks the page's SEO structure, or a hydration mismatch. None of that is visible in the file.
+
+Run this **after** `code-review` converges, not instead of it.
+
+## Scope, and where it overlaps `code-review`
+
+The split is *source vs. rendered*, and it is deliberate:
+
+| `code-review` asks                                | This skill asks                                          |
+| :------------------------------------------------ | :------------------------------------------------------- |
+| Is `aria-label` present on the icon-only button?   | Tab to it — what name does the browser actually announce? |
+| Is the root a `<section>` with a heading? (§8.6)    | Does the rendered heading outline form a valid tree?      |
+| Is `grid-cols-1 md:grid-cols-3` in the class?       | Does the grid actually have 3 columns at 768?             |
+| Is `gap-*` on the multi-child container? (§2.6)     | Does spacing rhythm visibly break at `md:`?               |
+
+
+
+
+| Is there a hardcoded hex? (§2.4)                    | Is the card unreadable in dark mode?                      |
+
+**§5 and §6 below intentionally overlap `code-review` §8.** The static pass confirms the attribute exists; this one confirms it *works* and that the markup is correct in context — a block's heading level, for instance, is only wrong relative to the page that composes it, which no single-file review can see. Where a defect's root cause is a rule `code-review` owns, fix it there and re-converge that loop.
+
+One correction to carry back: `code-review` §8.2 says image `alt` must be "not empty." That is wrong for decorative images, where `alt=""` is the correct and required value — see **5.11**.
+
+---
+
+## The Audit Loop
+
+The phases are **one iteration**, not a one-shot script. Fix what the audit finds, then re-run the whole thing from the capture step. Repeat until one complete iteration finds nothing and changes nothing.
+
+```text
+setup:  Phase 0, Phase 1            # once — scope clean, scratch route up, dev server running
+
+iteration = 1
+loop:
+  Phase 2   re-capture the full matrix
+  Phase 3   all 71 checks
+  Phase 4   fidelity
+
+  if zero ❌ and zero fixes applied this pass:
+    converged → Phase 5
+
+  if a check is ❌ that an earlier iteration already fixed:   stop → 🔴 oscillating
+  if the same check is ❌ twice in a row after a fix:          stop → 🔴 stuck
+  if iteration == 5:                                          stop → 🔴 budget exhausted
+
+  apply a fix for every ❌
+  re-run the Phase 0 scoped type-check + lint
+  iteration += 1
+  go to loop                        # from Phase 2, never from mid-checklist
+```
+
+**Convergence requires both halves: no failures *and* no edits.** A pass that finds nothing but where you still adjusted something has not converged — the adjustment is unverified until a capture proves it. This is also why **you may not edit anything that is not a recorded ❌**. Gold-plating a spacing value you merely dislike restarts the loop for no logged reason and is the one reliable way to make it never terminate.
+
+### Why the full matrix, every iteration
+
+Resuming mid-checklist after a fix is the mistake. Rendered fixes cascade harder than static ones, because CSS is global and a class that repairs one width routinely damages another:
+
+- `overflow-hidden` to stop the 320 overflow (**2.1**) clips a focus ring or a dropdown at 1440 (**2.4**)
+- `min-w-0` per **3.3** lets the title finally shrink — and now it needs `truncate` (**2.2**)
+- `<h1>` → `<h2>` per **5.1** leaves an `<h3>` beneath it, so the outline now skips a level (**5.2**)
+- `aria-hidden` on an icon per **6.4** strips the button's only accessible name (**6.3**)
+- `bg-card` to fix dark mode (**2.3**) drops the card below 4.5:1 against the section background in *light* (**2.5**)
+- `max-w-*` to bound the 2560 case (**3.9**) narrows the block at 1440 and breaks fidelity (Phase 4)
+
+Each of those lands in a section that already passed. A capture only proves what was true when it was taken.
+
+### The one exemption
+
+A fix that **cannot** alter rendering lets you reuse the existing captures for §1–§4 and re-verify only §5–§6. That covers exactly: adding or editing `aria-*`, `alt`, `datetime`, `id`, `scope`, or `role`; swapping a heading tag while its classes stay identical (Tailwind preflight leaves headings unstyled, so `<h2 className="text-lg">` → `<h3 className="text-lg">` is visually identical); and wrapping content in `<figure>`, `<article>` or `<time>` with no added classes.
+
+Anything touching `className`, element nesting, or a component boundary is a full re-capture. If you are unsure which side a fix falls on, it is a full re-capture — the exemption exists to stop an agent from quietly skipping captures under cost pressure, not to create a fast path.
+
+### The edit surface — what a fix may touch
+
+**Every fix lands in the block's own file**, plus files inside its own `components/` subfolder if it is multi-file. That is the entire writable surface. For the duration of the audit everything else is **read-only**:
+
+| Off limits | Why |
+| :--------- | :-- |
+| `src/components/ui/**` | Shadcn primitives are shared by every block in the library |
+| `src/app/globals.css` | The tokens are the product's contract with the buyer (**7.1**) |
+| `tailwind.config.*`, `tsconfig.json`, `eslint.config.mjs`, `package.json` | A block that needs a config change is not zero-config (`code-review` **13.8**) |
+| Any other block, shared helper, or app file | Not this block's concern |
+
+The sole exception is the Phase 1 scratch route, which this skill creates and deletes itself.
+
+The reason is blast radius: retuning a token in `globals.css` to fix one block's contrast silently restyles **every other block in the library**, and you will not notice until someone else's audit fails. One block's defect is never worth a library-wide change made without looking at the library.
+
+**When a fix genuinely requires an out-of-scope change, stop. Do not work around it.**
+
+The workaround is always available and always wrong — hardcode the value in the block and the contrast passes. You have then traded a scope violation for a `code-review` §2.4 / §11.6 violation, and shipped a block that breaks the moment the buyer changes their theme (**7.1**). That is strictly worse than the original defect, and it hides instead of reporting.
+
+Take the 🔴 **stuck** exit instead, and name three things: the check that failed, the file that would need to change, and what change it needs. That is a decision for whoever owns the design system, and handing it over intact is the correct outcome — not a failure of the audit.
+
+### Stopping
+
+Four exits, and only the first is a pass:
+
+| Exit | Condition | What it means |
+| :--- | :--- | :--- |
+| 🟢 **Converged** | one full iteration, zero ❌, zero edits | ship it |
+| 🔴 **Oscillating** | a check fails that an earlier fix resolved | two checks are in genuine tension — a design decision, not another fix attempt. Report both and the widths involved |
+| 🔴 **Stuck** | same check ❌ twice after being "fixed", **or the only real fix is outside the edit surface** | the cause is outside the block, or the fix is not addressing it. Name the file that would have to change |
+| 🔴 **Budget** | 5 iterations without converging | stop and report; do not keep going |
+
+The 320-versus-1440 pair above is the canonical oscillation: clamping overflow at the small width clips at the large one, and un-clipping restores the overflow. Do not attempt a third swing at it — say which two checks conflict and hand the tradeoff back.
+
+By iteration 3, if new defects are still appearing in sections that previously passed, the fixes are too broad. Narrow them before spending iteration 4.
+
+### Cost
+
+A full matrix is **15 captures** (320 light, plus 7 widths × 2 themes). At five iterations that is 75. This is the expensive part of the audit, which is the reason the loop is written down instead of left to judgment: an undocumented loop gets silently truncated. Budget for 2–3 iterations on a normal block.
+
+The Phase 0 scoped type-check and lint re-run every iteration — fast enough, and scoped so an unrelated error elsewhere in the app never stalls the loop. No production build runs at any point; see Phase 0 for what that leaves uncovered.
+
+---
+
+## Phase 0 — Preconditions
+
+**Scope is whatever the caller named** — a single block file, or a folder when the block is multi-file. Only errors inside that scope block this audit. A pre-existing type error elsewhere in the app is not this block's problem and must not stall it.
+
+```bash
+TARGET=src/components/uiable/blocks/<category>/<block-name>    # file or folder, as given
+
+npx tsc --noEmit -p tsconfig.json | grep -F "$TARGET"          # scoped types
+npx eslint "$TARGET"                                            # scoped lint
+```
+
+Stop here if either reports anything inside `$TARGET`; a type error means what renders is not what you reviewed.
+
+> **Do not "optimize" this to `npx tsc --noEmit "$TARGET"`.** Passing files to `tsc` explicitly makes it **ignore `tsconfig.json` altogether** — so `paths` goes with it, every `@/components/ui/*` import fails to resolve, and you get a screen of fabricated errors about the block's own dependencies. The `-p` flag is what keeps the aliases, `jsx` and `strict` settings alive; the `grep` is what narrows the *reporting*. Checking is project-wide either way, and that is fine — it costs one command and cannot lie to you.
+>
+> On a large monorepo where the full pass is genuinely too slow, narrow the *checking* with a throwaway config that inherits the real one, rather than by dropping it:
+>
+> ```jsonc
+> // tsconfig.audit.json — temporary, delete with the scratch route
+> { "extends": "./tsconfig.json", "include": ["src/components/uiable/blocks/<category>/<block-name>/**/*"] }
+> ```
+>
+> TypeScript still pulls in everything the block imports, which is exactly what you want checked, and skips the rest of the app.
+
+No production build runs in this audit — it is a project-level concern, not a per-block one, and a full Next build per iteration is not worth its cost here. Be aware of what that leaves uncovered: **server/client boundary violations, non-serializable props crossing it, and a missing `"use client"` surface at build and not under `npm run dev`.** Catch those in CI or a pre-merge check; this gate will not see them.
+
+---
+
+## Phase 1 — Get the block on screen
+
+**Find an existing preview route first:**
+
+```bash
+grep -rn "blocks/" src/app --include="*.tsx" -l | head
+ls src/app 2>/dev/null
+```
+
+**If none exists, use a scratch route** — and delete it when done:
+
+```tsx
+// src/app/__audit/page.tsx  — TEMPORARY, delete before finishing
+import Block from "@/components/uiable/blocks/<category>/<block-name>/<block-name>"
+
+export default function AuditPage() {
+  return <Block />
+}
+```
+
+> **The scratch route must not survive the audit.** It imports a block into the app's routable tree; left behind it ships as a real page. Delete it in Phase 6 and confirm `ls src/app/__audit` returns nothing. If the run is interrupted, deleting this is the first thing to do on resume.
+
+Boot it and drive it with whatever browser tooling the session has — the `run` skill can launch the app and capture screenshots if no browser tool is wired directly. Write every screenshot to the **scratchpad**, never into the repo.
+
+```bash
+npm run dev    # background; note the port, it is not always 3000
+```
+
+---
+
+## Phase 2 — Capture matrix
+
+Capture at each width below in **both themes**.
+
+| Width       | Represents                   | Why this one                                              |
+| :---------- | :--------------------------- | :-------------------------------------------------------- |
+| `320`       | smallest real phone           | overflow and clipping surface here first — light only       |
+| `390`       | baseline mobile               | stacking, tap targets, truncation                           |
+| `767`       | **just below `md:`**          | the widest mobile layout — where mobile breaks, not at 768  |
+| `768`       | `md:` — tablet                | the first layout switch                                     |
+| `1023`      | **just below `lg:`**          | the widest tablet layout                                    |
+| `1440`      | design width                  | the frame the design was drawn at                           |
+| `2560`      | ultrawide                     | is content still bounded, or stretched                      |
+| `844 × 390` | phone landscape               | short viewport — breaks full-height centered heroes         |
+
+**Test just below each breakpoint, not only at it.** A layout switches cleanly at exactly 768 and fails at 767, because the last few pixels of the previous range are where content is most cramped. Auditing only at breakpoint values is the most common way a responsive pass misses real bugs.
+
+Theme switching depends on the app's strategy — with `next-themes` on the `class` strategy, toggle `document.documentElement.classList` between `dark` and nothing; otherwise emulate `prefers-color-scheme`. **Confirm the toggle took effect in the screenshot before trusting a clean dark pass** — a light screenshot labeled "dark" is the most common false green in this gate.
+
+---
+
+## Phase 3 — Audit checklist
+
+71 checks in seven groups. Mark each ✅ PASS / ❌ FAIL / ⏭️ N/A.
+
+> ## ⚠️ §4.9 is a hard blocker
+>
+> **Sibling spacing must come from `gap`.** This is CRITICAL in `code-review` §2.6, and that severity carries here — **4.9** is the same rule, proven against the rendered DOM instead of the class strings.
+>
+> A single violation means the block is **not ready**, no matter how clean the other 70 checks are. It cannot be marked ⏭️ N/A. It cannot be deferred as a follow-up. It cannot be traded against a passing verdict anywhere else, and **the loop does not converge while it is ❌.**
+>
+> It is the most-violated rule in the entire audit because it fails silently: margin-based spacing *looks* correct in every capture. The only thing that catches it is running the assertion — so run it, every iteration, at both widths. A block that was never asserted has not passed **4.9**; it has an unverified **4.9**.
+
+### How to work it: one capture at a time
+
+Do **not** walk the checklist top to bottom — that makes you reopen every screenshot six times. Take one capture, evaluate everything that width can reveal, record results, move to the next. Order: **320 → 390 → 767 → 768 → 1023 → 1440 → 2560 → landscape.**
+
+The routing tables below are **pointers into the checklist, not a restatement of it.** The numbered checks in §1–§6 are the source of truth; the cues here are only there to tell you what to look for while a given capture is on screen. If the two ever disagree, the check wins.
+
+**On every capture, both themes:**
+
+| Check | Cue |
+| :---- | :-- |
+| **2.2** | text clipping or overlap |
+| **2.3** | dark legibility — on each dark capture |
+| **2.5** | contrast, sampled from rendered pixels |
+| **2.7** | image aspect ratio |
+| **4.4** | centering gaps measured left/right, top/bottom |
+| **4.8** | shared edges actually align |
+
+**Per viewport — what only this width reveals:**
+
+| Capture | Checks | What this width is for |
+| :------ | :----- | :--------------------- |
+| **320** light | **2.1**, **3.3**, **3.4**, **3.11** | The overflow gate. Assert `scrollWidth <= innerWidth` before anything else — if it fails here, **3.3** (`min-w-0`) and **3.4** (unbroken strings) are the two causes to check, in that order |
+| **390** | **3.5**, **3.11**, **4.6**, **3.13** | Baseline mobile. Re-capture with ~3× the text for **3.5**; wrapped text is what exposes **4.6** icon alignment |
+| **767** | **3.2**, **3.3**, **3.6**, **3.1** | Widest mobile — the cramped end of the range. Second most likely place **3.3** bites. Confirm via **3.1** that this is still the mobile layout, not `md:` |
+| **768** | **3.1**, **3.6**, **4.5**, **3.14** | First layout switch. Did the grid actually change columns, did `gap` scale, did centering survive the switch |
+| **1023** | **3.2**, **3.6**, **3.1** | Widest tablet. Same cramped-end logic as 767, one breakpoint up |
+| **1440** | **3.10**, **2.4**, **3.15**, **4.7** | Design width — Phase 4 fidelity is compared here. Line length, focus rings, image `sizes`, and optical centering of icons in round buttons (largest capture, so the easiest place to see a 1–2px offset) |
+| **2560** | **3.9**, **3.10**, **4.1** | Ultrawide. Is content still bounded by `max-w-*`, or is prose stretched past reading width |
+| **844×390** | **3.8**, **3.13** | Landscape. Short viewport — `min-h-screen` heroes clip, sticky elements eat the fold |
+
+**Not visible in any capture.** These need browser state, not a screenshot — run them once, separately, and never mark them passed off a screenshot that merely looked fine:
+
+| Check | How |
+| :---- | :-- |
+| **3.7** | emulate 200% zoom |
+| **3.12** | inspect the viewport meta for `user-scalable=no` / `maximum-scale` |
+| **2.6** | emulate `prefers-reduced-motion` |
+| **2.8** | select the text and try to copy it |
+| **3.16** | read the classes for `pl-*`/`pr-*`/`ml-*`/`mr-*` on directional spacing |
+| **4.2**, **4.3** | read the classes — a capture that *looks* centered does not tell you whether the technique is sound. `my-auto` and hand-tuned padding center correctly right up until the content length changes |
+| **4.9** | run the gap assertion in the console at **390 and 1440** — responsive gaps (`gap-4 md:gap-8`) resolve differently at each, so one width does not prove the other |
+| **7.1** | override the tokens to hostile values and re-capture 390 + 1440 in both themes — this is a second mini-matrix, not a glance |
+| **7.2** | read computed `animation-name` and `font-family` off the rendered elements |
+| **7.3** | click every visible control and confirm it does something, or is not presented as a control |
+| **7.4** | read the source — where does the copy actually live |
+| **7.5** | scale the 1440 capture to ~400px wide and look at it |
+| **7.6** | run the hand-rolled-component sweep in the console — the DOM is where the missing behaviour shows |
+| **7.7** | run the dead-CSS script at **390 and 1440** — a class inert at one width may be live at the other, so only remove what is dead at both |
+| **§1**, **§5**, **§6** | console, DOM and keyboard — run once on the 1440 capture's live page, not per width |
+
+§5 and §6 are width-independent: the heading outline and ARIA wiring do not change with the viewport, so audit them once rather than eight times. The exception is **6.11** tab order — re-check it at 390 if the layout reorders anything at mobile, because visual order changed and DOM order did not.
+
+### §1 Render correctness (5)
+
+- [ ] **1.1** **Zero console errors.** Read the console, not just the page — key warnings, failed images, and thrown effects all log without visibly breaking layout
+- [ ] **1.2** **No hydration mismatch.** `Text content did not match` / `Hydration failed`. Causes: `Date.now()`, `new Date()`, `Math.random()`, `toLocaleString()`, `window`/`document` read during render. Invisible to any static pass and the main bug class that reaches production from a clean review
+- [ ] **1.3** **Every image loads.** Check the network panel for 404s — a bad `next/image` src renders as empty space, which reads as a spacing bug
+- [ ] **1.4** **No layout shift on load.** Images without dimensions and webfont swaps both push content down after first paint
+- [ ] **1.5** **Interactive elements respond.** Click, hover and tab through everything. A `Dialog` that never opens passes every static check. **Clicking a link must not navigate away** — blocks ship `href="#"` placeholders (`code-review` §13.7), so a jump to the top of the page is expected and a navigation is a surviving real destination. Treat leaving the page as a §13.7 finding, and note that it also invalidates the captures taken after it
+
+### §2 Visual defects (8)
+
+- [ ] **2.1** **No horizontal overflow at 320.** Assert it — `document.documentElement.scrollWidth <= window.innerWidth` — do not eyeball. A few px of overflow is invisible and real
+- [ ] **2.2** **No text clipping or overlap** at any width, either theme
+- [ ] **2.3** **Dark mode is genuinely legible.** Hunt un-themed white cards, text near background luminance, vanishing borders. Compare themes side by side rather than judging dark alone
+- [ ] **2.4** **Focus rings visible in both themes.** A ring that reads on white often disappears on a dark surface
+- [ ] **2.5** **Body text clears 4.5:1**, large text 3:1, in **both** themes. Sample the rendered pixels; do not infer from token names
+- [ ] **2.6** **`prefers-reduced-motion` is respected.** Emulate it — animations should shorten or stop, not merely slow down
+- [ ] **2.7** **Images hold aspect ratio** at every width — no stretch, no unintended crop
+- [ ] **2.8** **Text stays selectable.** No `select-none` on content that a reader would copy
+
+### §3 Responsive behavior (16)
+
+- [ ] **3.1** **Layout actually switches.** `md:grid-cols-3` in a class string is not evidence of three columns at 768 — confirm in the capture
+- [ ] **3.2** **Just-below-breakpoint widths hold** (767, 1023) — see the Phase 2 note
+- [ ] **3.3** **Flex and grid children carry `min-w-0` where they must shrink.** Children default to `min-width: auto` and refuse to shrink below content size — the single most common cause of unexplained overflow
+- [ ] **3.4** **Long unbroken strings wrap.** Drop in a 60-character URL or email; needs `break-words` / `overflow-wrap`. Untested, it overflows every mobile width
+- [ ] **3.5** **Long content does not break the layout.** Replace one title and one description with ~3× the text, re-capture at 390. Blocks are built with tidy placeholder copy and fail on real content
+- [ ] **3.6** **Spacing rhythm holds across breakpoints.** Right at 1440 and cramped at 768 means `gap` needs breakpoints (`code-review` §7.6)
+- [ ] **3.7** **200% zoom does not break it** (WCAG 1.4.4). Content reflows, nothing is clipped or overlapped
+- [ ] **3.8** **Phone landscape works.** At 844×390, a `min-h-screen` hero with vertically centered content typically clips top and bottom
+- [ ] **3.9** **Content stays bounded at 2560.** A block with no `max-w-*` on its wrapper stretches text to unreadable line lengths
+- [ ] **3.10** **Line length stays readable** — roughly 65–75 characters at desktop. Full-width prose is a design defect even when nothing is technically broken
+- [ ] **3.11** **Touch targets are ≥ 44×44px at mobile**, including icon-only buttons and close affordances
+- [ ] **3.12** **Zoom is not blocked.** No `user-scalable=no` or `maximum-scale=1` reaching the viewport meta
+- [ ] **3.13** **Sticky and fixed elements do not cover content** at short viewport heights
+- [ ] **3.14** **Horizontal scroll containers show an affordance** — a partial next card, a fade, or arrows. A carousel that looks complete hides its remaining items
+- [ ] **3.15** **`next/image` with `fill` has a correct `sizes`.** Wrong `sizes` silently ships a desktop-weight image to phones
+- [ ] **3.16** **Logical spacing properties for RTL safety** — `ps-*`/`pe-*`/`ms-*`/`me-*` over `pl-*`/`pr-*`/`ml-*`/`mr-*` on anything directional
+
+### §4 Layout, centering & alignment (9)
+
+- [ ] **4.1** **Horizontal centering is `mx-auto` on a width-bounded element**, or `justify-center` on a flex parent — never `text-center` standing in for block layout
+- [ ] **4.2** **Vertical centering is `items-center` on a flex/grid parent with a real height context.** `my-auto` and hand-tuned padding both drift the moment content length changes
+- [ ] **4.3** **Both-axis centering is one declaration** — `grid place-items-center`, or `flex items-center justify-center`. Not `top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2` guesswork
+- [ ] **4.4** **Centering is measured, not eyeballed.** Compare left vs. right (and top vs. bottom) gaps in the capture. An unequal pair means a stray margin, an asymmetric padding, or a scrollbar-width shift
+- [ ] **4.5** **Centering survives every breakpoint.** A `md:text-left` that never resets its container's `justify-center`, or vice versa, is the usual culprit
+- [ ] **4.6** **Icon-beside-text alignment is deliberate** — `items-center` for single-line pairs, `items-baseline` or `items-start` when the text can wrap to two lines. `items-center` on wrapped text floats the icon to the vertical middle of the block
+- [ ] **4.7** **Icons are optically centered in circular or square buttons.** SVG viewBox padding routinely makes a geometrically centered glyph look off by a pixel or two
+- [ ] **4.8** **Shared edges actually align.** Card tops, column starts, and baseline grids line up across siblings — not off by a few px from inconsistent padding
+- [ ] **4.9** **All sibling spacing comes from `gap`, proven in the DOM (⚠️ CRITICAL — hard blocker).** `code-review` §2.6 owns this as a CRITICAL authoring rule against the class strings; this is the rendered proof, and it catches cases a grep cannot. The rule applies at **every** nesting level and at every child count — a two, three or four column card grid, a stacked pair of paragraphs, and an icon sitting beside its own label are all the same case. The space between siblings is `gap-*` on their parent, never `m-*`/`mt-*`/`ms-*` on the children.
+
+  Assert it instead of reading classes:
+
+  ```js
+  const noGap = (v) => v === "normal" || parseFloat(v) === 0
+
+  ;[...document.querySelectorAll("section, section *")]
+    .filter((el) => el.children.length >= 2)
+    .flatMap((el) => {
+      const s = getComputedStyle(el)
+      const marginKids = [...el.children].filter((k) => {
+        const m = getComputedStyle(k)
+        return ["marginTop", "marginRight", "marginBottom", "marginLeft"].some(
+          (p) => parseFloat(m[p]) > 0,
+        )
+      })
+      const out = []
+      if (marginKids.length)
+        out.push({ el, issue: `${marginKids.length} child(ren) carry margin`, marginKids })
+      if (/flex|grid/.test(s.display) && noGap(s.rowGap) && noGap(s.columnGap))
+        out.push({ el, issue: "flex/grid parent with 2+ children and no gap" })
+      return out
+    })
+  ```
+
+  Every row it returns is a violation — a child carrying margin, or a multi-child flex/grid parent with no gap at all. Fix it in the source and route the fix through `code-review` §2.6, since that check is CRITICAL there.
+
+  **Do not mistake a parent's own padding for sibling spacing.** `px-4` on a button that wraps an icon and a label is correct internal padding and not a finding. `mr-2` on the icon *inside* that button is the violation. The test is whether the value sits **between two siblings** or **around their parent**.
+
+  The only legitimate exception is spacing that must skip one specific child, which `gap` cannot express. Record that as an accepted deviation in the summary rather than leaving it to read as an oversight.
+
+### §5 Semantic HTML & SEO structure (14)
+
+- [ ] **5.1** **The block does not claim `<h1>`.** A page has exactly one, and the page owns it — blocks almost always start at `<h2>`. A block hardcoding `<h1>` breaks every page that composes two of them
+- [ ] **5.2** **Heading levels do not skip.** `<h2>` → `<h4>` is a broken outline even when it looks right
+- [ ] **5.3** **Heading level is chosen by structure, not size.** Reach for `<h2 className="text-lg">`, never `<h4>` because the size happened to match
+- [ ] **5.4** **The rendered outline is a valid tree.** Extract it — `[...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].map(h => h.tagName + " " + h.textContent)` — and read it as a table of contents. If it does not make sense as one, neither will it to a crawler
+- [ ] **5.5** **`<section>` has an accessible name.** An unnamed `<section>` is a `<div>` to assistive tech — wire `aria-labelledby` to its heading's `id`
+- [ ] **5.6** **Lists are `<ul>`/`<ol>`/`<li>`** — not `<div>`s with bullet glyphs. Feature grids and nav menus are lists
+- [ ] **5.7** **`<nav>` carries an `aria-label`** when a page has more than one
+- [ ] **5.8** **`<article>` for self-contained, syndicatable content** — blog cards, testimonials, press items
+- [ ] **5.9** **`<button>` for actions, `<a href>` for navigation.** An `<a>` without `href` is not focusable and not announced as a link
+- [ ] **5.10** **Link text is descriptive out of context.** "Read more" ×6 in one block gives a screen-reader user six identical links
+- [ ] **5.11** **`alt` matches the image's role.** Descriptive for content images; **`alt=""` for decorative ones** — empty is correct and required there, and it is what `code-review` §8.2 gets wrong
+- [ ] **5.12** **`<time datetime="...">` for dates**, so the machine-readable value matches the display string
+- [ ] **5.13** **`<figure>`/`<figcaption>`, `<address>`, `<blockquote>` where the content is literally that.** A quote in a `<div>` loses its meaning
+- [ ] **5.14** **Structured data where the block type warrants it** — FAQ, Product, Breadcrumb, Review. This is the concrete SEO win in a block audit, and the most commonly skipped one
+
+### §6 ARIA & assistive tech (12)
+
+- [ ] **6.1** **No ARIA where native HTML already works.** First rule of ARIA. `<button>` beats `<div role="button" tabIndex={0}>` every time
+- [ ] **6.2** **No redundant roles** — `<nav role="navigation">`, `<ul role="list">` add nothing
+- [ ] **6.3** **Every icon-only control has an accessible name.** Verify by what the browser announces, not by the attribute's presence
+- [ ] **6.4** **Decorative icons are `aria-hidden="true"`** — and confirm the icon is not the element's only label before hiding it
+- [ ] **6.5** **`aria-labelledby` / `aria-describedby` point at IDs that exist.** Check in the DOM; a typo'd reference fails silently with no console error
+- [ ] **6.6** **IDs are unique on the page.** A block rendered twice with hardcoded IDs breaks every `aria-labelledby` and `<label for>` in both copies — a real bug in registry blocks, which are built to be reused
+- [ ] **6.7** **`aria-expanded` on disclosure triggers, and it tracks state.** Toggle it and re-read the attribute
+- [ ] **6.8** **`aria-current="page"` on the active nav item**
+- [ ] **6.9** **Async status is announced** via `aria-live` — a form result that only appears visually is silent to a screen reader
+- [ ] **6.10** **Form controls have real `<label>`s.** A placeholder is not a label; it disappears on input and is inconsistently announced
+- [ ] **6.11** **Tab order matches visual order.** Tab through the whole block; no positive `tabIndex`, nothing focusable that is visually hidden, nothing skipped
+- [ ] **6.12** **Shadcn a11y behavior survived customization.** Dialogs and dropdowns ship focus trapping, focus return and escape handling — verify a customized one still traps, still returns focus to its trigger, and still closes on Escape
+
+### §7 Product readiness (7)
+
+These blocks are **sold**. The code is the deliverable, and the preview is the sales pitch — so a block that renders perfectly in our app and fails in a buyer's project is a defective product, not a styling nit. This group exists because none of the other six ask whether the block survives leaving our repo.
+
+- [ ] **7.1** **It survives the buyer's theme, not just ours.** Every token in §11.1 is a variable the buyer redefines. Override them to hostile values and re-check: set `--primary` to a pale yellow (`#fde047`) and confirm `text-primary-foreground` still reads on it; set `--radius` to `0` and then `1.5rem` and confirm nothing overlaps or clips. A block whose contrast only works because our primary happens to be mid-blue is broken for every buyer who changes it — and changing it is the first thing they do
+- [ ] **7.2** **Zero-config install, proven in the DOM.** `code-review` §13.8 greps this file; here, read computed styles for what the block actually depends on. Check `animation-name` on animated elements resolves to a keyframe Tailwind ships, and `font-family` resolves to the buyer's stack rather than a family only we load. This catches a dependency arriving through a Shadcn primitive, which the grep never sees
+- [ ] **7.3** **No dead affordances.** These blocks are static by design, and that is fine — but a control that *looks* interactive and does nothing reads as broken, not as a placeholder. Every visible affordance either works self-contained (tabs switch, accordions open, carousels move) or is not shown as a control at all. Links are the settled exception: `href="#"` per `code-review` §13.7 is the agreed convention. A Submit button that silently does nothing is not
+- [ ] **7.4** **Content is swappable from one place.** The buyer's first action is replacing every string. Confirm the copy lives in one module-scope array or object (`code-review` §1.4, §9.2) rather than scattered through the JSX — the perf rationale in §9.2 is secondary here; the real reason is that a buyer who has to hunt through 200 lines of markup to change a heading will say so in a review
+- [ ] **7.5** **It reads as a gallery thumbnail.** The block is sold from a preview image, so the thumbnail *is* the pitch. Scale the 1440 capture down to ~400px wide and look at it: the hierarchy should still be legible, the focal point obvious, and the block recognisable as what it is. A layout that only resolves at full size will not sell
+- [ ] **7.6** **Nothing hand-rolled that a Shadcn component already provides.** `code-review` §3.10 holds the full raw-element → component table and finds these by reading; this finds them by their **missing behaviour**, which is the half a source read cannot see. A hand-rolled dropdown looks fine in a screenshot and in the JSX — what it lacks is focus trapping, Escape handling, arrow-key navigation, `aria-expanded` bookkeeping and focus return, all of which the real component ships. Buyers are paying for a Shadcn-based library; bespoke divs wearing ARIA are the thing they are paying not to write.
+
+  ```js
+  const NATIVE = "button, a[href], input, select, textarea, summary, [role='button'], [tabindex]"
+  const CONTROL = "button, input, [role='button'], [role='tab'], [role='checkbox'], [role='switch']"
+  const rolled = []
+
+  for (const el of document.querySelectorAll("section, section *")) {
+    const tag = el.tagName.toLowerCase()
+    const role = el.getAttribute("role")
+
+    if (role && /^(button|tab|tablist|menu|menuitem|checkbox|switch|radio|dialog|tooltip|progressbar|separator)$/.test(role)
+        && !["button", "input", "dialog", "progress", "hr"].includes(tag))
+      rolled.push({ el, signal: `role="${role}" on <${tag}>` })
+
+    if (el.classList.contains("cursor-pointer") && !el.matches(NATIVE))
+      rolled.push({ el, signal: "cursor-pointer on a non-interactive element" })
+
+    for (const a of ["aria-expanded", "aria-selected", "aria-checked", "aria-pressed"])
+      if (el.hasAttribute(a) && !el.matches(CONTROL))
+        rolled.push({ el, signal: `${a} on <${tag}> with no control role` })
+  }
+  console.table(rolled)
+  ```
+
+  Each row is a signal, not an automatic failure — read it against the block and decide:
+
+  | Signal in the DOM | Reach for |
+  | :---------------- | :-------- |
+  | `role="button"`, or `cursor-pointer` on a `div` | `Button` — or it is a dead affordance (**7.3**) |
+  | `role="tab"` / `role="tablist"` | `Tabs` |
+  | `role="dialog"` with no focus trap | `Dialog` · `AlertDialog` · `Sheet` · `Drawer` |
+  | `role="menu"` / `role="menuitem"` | `DropdownMenu` · `ContextMenu` |
+  | `aria-expanded` on a `div` | `Accordion` · `Collapsible` · `DropdownMenu` |
+  | `role="checkbox"` / `role="switch"` | `Checkbox` · `Switch` |
+  | `role="progressbar"` | `Progress` |
+  | `role="separator"`, or a bare 1px border `div` | `Separator` |
+  | `role="tooltip"` | `Tooltip` · `HoverCard` |
+  | `overflow-auto` with hand-written scrollbar CSS | `ScrollArea` |
+  | a cluster of pulsing grey placeholder `div`s | `Skeleton` |
+
+  The `cursor-pointer` signal is the highest-yield one and fires constantly: it is either a control that should be a `Button`, or an affordance that does nothing and belongs to **7.3**. Both are findings, so nothing it returns is safe to wave through. For any signal not in this table, go to `code-review` §3.10 for the component.
+
+- [ ] **7.7** **No dead CSS, proven against computed styles.** `code-review` §2.8 catalogues 29 patterns of valid-but-inert Tailwind classes and finds them by reading; this proves the structural ones from the DOM, which is the only way to be certain. Buyers read this source — a block carrying twenty classes that do nothing looks careless regardless of how it renders, and that is a product defect, not a nit.
+
+  ```js
+  const dead = []
+  for (const el of document.querySelectorAll("section, section *")) {
+    const cl = [...el.classList]
+    const s = getComputedStyle(el)
+    const ps = el.parentElement && getComputedStyle(el.parentElement)
+    const parentFlexGrid = ps && /flex|grid/.test(ps.display)
+    const has = (re) => cl.filter((c) => re.test(c))
+
+    // flex/grid child props with no flex/grid parent
+    if (!parentFlexGrid)
+      dead.push(...has(/^(items-|self-|justify-|order-|shrink|grow|basis-|flex-[0-9a-z])/).map((c) => [el, c, "parent is not flex/grid"]))
+    // gap on a non-flex/grid element
+    if (!/flex|grid/.test(s.display) && s.columnCount === "auto")
+      dead.push(...has(/^gap(-|$)/).map((c) => [el, c, "element is not flex/grid"]))
+    // offsets and z-index with no positioning
+    if (s.position === "static") {
+      dead.push(...has(/^(top-|right-|bottom-|left-|inset-)/).map((c) => [el, c, "element is static"]))
+      if (!parentFlexGrid) dead.push(...has(/^-?z-/).map((c) => [el, c, "static and not a flex/grid item"]))
+    }
+    // border colour with zero border width
+    if (["borderTopWidth","borderRightWidth","borderBottomWidth","borderLeftWidth"].every((p) => parseFloat(s[p]) === 0))
+      dead.push(...has(/^border-(?!collapse|separate|spacing)[a-z]/).map((c) => [el, c, "border-width is 0"]))
+    // h-full inside an auto-height parent
+    if (cl.includes("h-full") && ps && ps.height === "auto")
+      dead.push([el, "h-full", "parent height is auto"])
+    // group-* / peer-* with no marker
+    if (has(/^group-/).length && !el.closest(".group"))
+      dead.push(...has(/^group-/).map((c) => [el, c, "no .group ancestor"]))
+    if (has(/^peer-/).length && !el.parentElement?.querySelector(":scope > .peer"))
+      dead.push(...has(/^peer-/).map((c) => [el, c, "no .peer sibling"]))
+  }
+  console.table(dead.map(([el, c, why]) => ({ class: c, why, el })))
+  ```
+
+  Remove every class it returns, then **list all of them in the report's Dead CSS section** with the reason. Two caveats before deleting: a class may be inert at *this* width but live at another (`md:items-center` on a parent that only becomes `flex` at `md:`), so run the script at **390 and 1440** and only remove what is dead at both; and a responsive or state variant is reported by its full name, so check whether the base or the variant is the dead half before cutting.
+
+
+### Judgment — what the 71 checks do not name
+
+**The checklist is the floor, not the ceiling.** It holds what recurs across many blocks; it cannot anticipate what one specific block gets wrong. After working the checks, look at the rendered block as a whole and ask: *what is wrong here that nothing above named?* The captures are already open — this costs one more look, and it is the only part of the audit that can catch something genuinely novel.
+
+Fix what you find, under three rules:
+
+1. **Fix it, do not merely note it** — held to the same standard as a numbered check, and re-captured on the next iteration. It counts as a ❌ for convergence: an iteration that fixed something has not converged.
+2. **Record every one in the summary**, in its own section, with the same columns as the Change Log. A fix the report does not mention is indistinguishable from an unrequested edit (the no-gold-plating rule).
+3. **Do not add it to this file.** One occurrence is an observation, not a rule.
+
+Stay inside the edit surface, and keep the bar at *defect* — broken, unsafe, misleading, unusable — not preference. "I would have spaced this differently" is not a finding.
+
+**When one earns a number:** it has appeared in **three separate blocks**, it is **mechanically checkable** (a DOM assertion or a rule applied without re-deriving the reasoning), and it applies to **blocks generally** rather than one category. Short of all three, it stays a judgment call. Seventy-one checks is already a lot to carry through eight captures; a check that fires once in fifty blocks costs more attention than it saves. The "Off-checklist fixes" section of past reports is the intake queue — a third appearance is the signal to write the rule.
+
+---
+
+## Phase 4 — Design fidelity
+
+Take the branch matching whatever reference exists.
+
+> **The guardrail that outranks this whole phase:** fidelity never justifies a hardcoded value. `code-review` §11.6 — *closest token wins* — still holds. Where the design's color, spacing or radius has no matching token, snap to the nearest and record the deviation in the summary. Do **not** add `bg-[#2878d4]` or `p-[13px]` to close a gap. A block that matches Figma exactly and breaks theme switching has failed this gate, not passed it.
+
+### Branch A — Figma frame
+
+Pull real values rather than eyeballing the render:
+
+- `get_design_context` — spacing, type scale, color, radius as numbers
+- `get_screenshot` — the visual comparison
+- `get_variable_defs` — where the design uses variables; these map to tokens far more reliably than sampled pixels
+
+Compare in this order, because an error early makes everything after it look wrong: **layout proportions → spacing scale → type hierarchy → color → radius and shadow.**
+
+### Branch B — Source library original
+
+For a block migrated from Berry, Mantis or Saascable, verify **structure and hierarchy, not styling** — the source's colors, radii and shadows are exactly what the migration exists to replace. Match layout, content order and relative emphasis; let UIABLE tokens supply the rest.
+
+### Branch C — No reference
+
+Judge on its own merits: hierarchy (heading, body and supporting text read as three distinct levels), alignment (§4.8), rhythm (spacing from one consistent scale), and density consistent with neighbouring registry blocks — open one and compare.
+
+---
+
+## Phase 5 — Close out
+
+Reached only on a 🟢 converged exit. On any 🔴 exit, skip to the summary and report the exit.
+
+1. **Re-run the Phase 0 scoped type-check and lint** — the final gate on `$TARGET`. Every fix since setup has changed the source; anything reported here is a new iteration, not a footnote.
+2. **Re-run `code-review` once.** The loop's fixes edited `className` strings, so the static rules apply again. Write each fix to those rules *as you make it* — tokens not hex, `gap` not margin, no inline `style` — so this is a verification step rather than an expected second round of failures. If it does fail, fix it there, re-converge that loop, then re-capture here: a static fix that changes rendering re-opens this audit.
+3. **Delete the scratch route** and confirm `ls src/app/__audit` returns nothing. Delete `tsconfig.audit.json` too, if Phase 0's monorepo path was taken.
+4. **Stop the dev server.**
+5. **Emit the summary**, including the iteration count.
+
+### Known false alarms
+
+Do not spend an iteration on these:
+
+- The Next.js dev overlay and its badge — not part of the block
+- Font flash on first dev load — dev-only, absent from the production build
+- Hydration warnings naming `data-*` attributes injected by browser extensions
+- `Download the React DevTools` and similar informational console output
+- Fast Refresh log lines
+
+---
+
+## Summary Template
+
+```
+## Block Audit — [Block Name]
+
+**Block:** `src/components/uiable/blocks/<category>/<block-name>/<block-name>.tsx`
+**Reference:** [Figma <node> / <Source library> / none — rubric]
+**Captured:** 320, 390, 767, 768, 1023, 1440, 2560, 844×390 — light + dark
+**code-review:** converged, N iterations
+
+### Results
+- Iterations to converge: N          (exit: converged / oscillating / stuck / budget)
+- Captures taken: 15 × N
+- Total checks: 71
+- ✅ Passed: XX
+- ⏭️ N/A: XX
+
+### Render
+- Scoped types/lint: [clean/N]   Console errors: [0/N]   Hydration: [clean/N mismatches]
+
+### ⚠️ 4.9 — gap assertion (CRITICAL)
+- Asserted at 390: [clean / N violations]   at 1440: [clean / N violations]
+- Status: ✅ clean at both widths      ← the only value that permits a 🟢 verdict
+
+### Change Log
+
+| Iter | Check | Where | Change | Why |
+| :--- | :---- | :---- | :----- | :-- |
+| 1 | 3.3 | grid child, L47 | + `min-w-0` | 767 overflowed the viewport by 14px — the child's default `min-width: auto` held it at content width |
+| 1 | 5.1 | section heading, L38 | `<h1>` → `<h2>` | Block hardcoded `<h1>`; any page composing two of these emitted two and broke the outline |
+| 1 | 5.5 | `<section>` root, L36 | + `aria-labelledby="ft-h"`, + `id` on the h2 | Unnamed `<section>` was announced as a generic group, so the block had no landmark name |
+| 2 | 2.5 | card body copy, L52 | `text-muted-foreground` → `text-card-foreground` | The `bg-card` applied in iteration 1 dropped body copy to 3.9:1 in light — cascade from fix #1's dark-mode change |
+
+Chose `min-w-0` over `overflow-hidden` for row 1: the latter cleared the overflow but clipped the focus ring at 1440 (2.4).
+
+### Off-checklist fixes (judgment)
+Found by looking, not by a numbered check. Empty is a valid result and is still shown.
+
+| Iter | Where | Change | Why |
+| :--- | :---- | :----- | :-- |
+| 1 | star row, L212 | added `aria-label="4 out of 5"` to the group | the rating existed only as filled vs. unfilled SVGs — nothing announced it, and no check covers a rating specifically |
+| 2 | card, L198 | `min-h` on the card body | slides of unequal copy length made the carousel jump height on each advance — visible only while it was autoplaying |
+
+Seen before: none has appeared in three blocks yet, so none is proposed as a check.
+
+### Dead CSS removed (7.7 / code-review §2.8)
+
+Every class deleted, with the reason. An empty table is a valid result and must still be shown — "none found" is information; a missing section is not.
+
+| Class | Element | Why it was dead |
+| :---- | :------ | :-------------- |
+| `items-center` | `<div>` L44 | parent is not flex/grid |
+| `z-10` | `<span>` L51 | static, and not a flex/grid item |
+| `border-slate-200` | card wrapper L38 | border-width is 0 — no border ever rendered |
+| `duration-300` | CTA `<a>` L63 | no `transition-*` on the element |
+| `group-hover:translate-x-1` | icon L64 | no `.group` ancestor |
+| `md:text-sm` | `<p>` L47 | identical to the base `text-sm` |
+| `flex-row` | row L41 | already the default for `flex` |
+
+**Total removed: N**
+
+### Accepted deviations from reference
+1. Figma header is `#2878d4`; nearest token is `primary` (`#4680ff`). Took the token per §11.6
+
+### Verdict
+🟢 PASS — converged after N iterations; renders clean, responsive across the matrix, outline valid, fidelity within token constraints
+```
+
+The **Change Log** is the audit's actual output — a reader should be able to scan it and know every edit made to their block and what forced it, without opening a diff. Five rules keep it worth reading:
+
+- **One row per edit**, in the order applied. If a single ❌ took two edits, that is two rows.
+- **"Why" states the observed defect, with the measurement** — never the rule name. "Violated 3.3" is not a why; "767 overflowed the viewport by 14px" is. The check number is already in its own column; the Why column exists to say what was actually seen in the capture.
+- **"Where" is `file:line`.** On a multi-file block, name the file too — a bare line number is ambiguous across a `components/` subfolder.
+- **Nothing may appear here without a matching ❌ in the checklist.** This table is where the no-gold-plating rule becomes auditable: a row with no corresponding failure is an unrequested change, and it is exactly what a reviewer is scanning for.
+- **When a fix was chosen over an alternative that was tried and failed, say so below the table.** That is the record of an oscillation you caught and resolved rather than one you shipped, and it is the most useful line in the whole summary for anyone judging whether the right fix was picked.
+
+Rows stay grouped by iteration, so cascades read plainly: an iteration-2 row is almost always the consequence of an iteration-1 row, and naming which one turns a list of edits into an explanation.
+
+At emission time on a 🟢 there are no open items — this is history, not a to-do list.
+
+On a 🔴 exit, name the exit and the evidence: which check, which width, which theme, and for an oscillation, **both** checks in tension and why they conflict. The next person should start from the capture, not re-derive the problem.
